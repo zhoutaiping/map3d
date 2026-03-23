@@ -1,0 +1,23 @@
+{
+  "name": "china-3d-map",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "download-maps": "node scripts/download-province-maps.js",
+    "deploy": "pnpm build && tcb hosting deploy dist -e cloudbase-0g3dkj1pc3bdcf50"
+  },
+  "dependencies": {
+    "@cloudbase/js-sdk": "^2.26.1",
+    "echarts": "^5.5.1",
+    "echarts-gl": "^2.0.9",
+    "vue": "^3.5.25"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.2",
+    "vite": "^7.3.1"
+  }
+}
