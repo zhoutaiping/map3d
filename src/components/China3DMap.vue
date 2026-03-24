@@ -1,122 +1,22 @@
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from "vue";
+import { ref, watch, nextTick, onMounted, onBeforeUnmount } from "vue";
 import * as echarts from "echarts";
 import "echarts-gl";
 import chinaJson from "../../public/maps/china.json";
 import tooltipBg from "../assets/toolbg.png";
 import stationIcon from "../assets/statation.png";
 
-const emit = defineEmits(["region-change"]);
+const emit = defineEmits(["region-change", "view-state-change", "update:regionGroups"]);
 const props = defineProps({
   scatterData: {
     type: Array,
     default: () => [],
   },
+  regionGroups: {
+    type: Array,
+    default: () => [],
+  },
 });
-
-// 五大区划分
-const REGION_GROUPS = ref([
-  {
-    name: "西北大区",
-    color: "#3A936C",
-    colorStatus: true,
-    provinces: ["新疆维吾尔自治区"],
-    tooltip: [
-      {
-        name: "总规模",
-        value: "100 kW （个）",
-      },
-      {
-        name: "光伏",
-        value: "100 kW （个）",
-      },
-      {
-        name: "发电",
-        value: "100 kW （个）",
-      },
-    ]
-  },
-  {
-    name: "北方大区",
-    color: "#9EB46D",
-    colorStatus: true,
-    provinces: ["北京市", "天津市", "河北省", "山东省", "山西省", "辽宁省", "吉林省", "黑龙江省", "甘肃省", "青海省", "宁夏回族自治区", "陕西省", "内蒙古自治区", "四川省", "西藏自治区",],
-    tooltip: [
-      {
-        name: "总规模",
-        value: "100 kW （个）",
-      },
-      {
-        name: "光伏",
-        value: "100 kW （个）",
-      },
-      {
-        name: "发电",
-        value: "100 kW （个）",
-      },
-    ]
-  },
-  {
-    name: "南方大区",
-    color: "#3F8BCF",
-    colorStatus: true,
-    provinces: ["江苏省", "上海市", "浙江省", "福建省", "江西省", "广东省", "广西壮族自治区", "海南省", "香港特别行政区", "澳门特别行政区"],
-    tooltip: [
-      {
-        name: "总规模",
-        value: "100 kW （个）",
-      },
-      {
-        name: "光伏",
-        value: "100 kW （个）",
-      },
-      {
-        name: "发电",
-        value: "100 kW （个）",
-      },
-    ]
-  },
-  {
-    name: "西南大区",
-    color: "#987E53",
-    colorStatus: true,
-    provinces: ["重庆市", "贵州省", "云南省"],
-    tooltip: [
-      {
-        name: "总规模",
-        value: "100 kW （个）",
-      },
-      {
-        name: "光伏",
-        value: "100 kW （个）",
-      },
-      {
-        name: "发电",
-        value: "100 kW （个）",
-      },
-    ]
-  },
-  {
-    name: "中原大区",
-    color: "#9D625D",
-    colorStatus: true,
-    provinces: ["湖北省", "安徽省", "湖南省", "河南省"],
-    tooltip: [
-      {
-        name: "总规模",
-        value: "100 kW （个）",
-      },
-      {
-        name: "光伏",
-        value: "100 kW （个）",
-      },
-      {
-        name: "发电",
-        value: "100 kW （个）",
-      },
-    ]
-  },
-]);
 
 // 大区显示状态
 const showRegions = ref(false);
@@ -129,6 +29,15 @@ const showLegend = ref(false);
 
 // 是否显示大区按钮（仅在中国地图时显示）
 const showRegionButton = ref(true);
+
+// 通知父组件视图状态变化
+function emitViewStateChange() {
+  emit("view-state-change", {
+    showRegions: showRegions.value,
+    showRegionColors: showRegionColors.value,
+    showLegend: showLegend.value,
+  });
+}
 
 // ==================== 常量定义 ====================
 const DEFAULT_VIEW_CONTROL = {
@@ -328,8 +237,8 @@ function renderChinaMap(resetRegionState = false) {
       backgroundColor: 'transparent',
       borderColor: 'transparent',
       borderWidth: 0,
-      position: function (point, params, dom, rect, size) {
-        return [point[0], point[1] - 20];
+      position: function (point) {
+        return [point[0]-80, point[1] - 150];
       },
       extraCssText: 'background: url(' + tooltipBg + ') no-repeat center center; background-size: 100% 100%; padding: 15px 20px; box-shadow: none;',
       formatter: function (params) {
@@ -410,7 +319,7 @@ function renderChinaMap(resetRegionState = false) {
           borderWidth: 1,
         },
         label: {
-          show: true,
+          show: false,
           color: "#fff",
           textShadowColor: "#000",
           textShadowBlur: 3,
@@ -497,8 +406,8 @@ function renderRegionGroupMap() {
         }
         return '<div style="color: #fff;">' + params.name + '</div>';
       },
-      position: function (point, params, dom, rect, size) {
-        return [point[0], point[1] - 20];
+      position: function (point) {
+        return [point[0]-80, point[1] - 150];
       },
     },
     geo3D: {
@@ -536,16 +445,20 @@ function renderRegionGroupMap() {
       {
         type: "scatter3D",
         coordinateSystem: "geo3D",
-        symbol: 'image://' + stationIcon,
+        // symbol: 'image://' + stationIcon,
+        symbolSize: 15,
         
         zlevel: 99,
         geo3DIndex: 0,
         silent: false,
         itemStyle: {
           opacity: 1,
+           color: function (params) {
+            return params.data && params.data.status === 1 ? "#52c41a" : "#fa8c16";
+          },
         },
         label: {
-          show: true,
+          show: false,
           color: "#fff",
           textShadowColor: "#000",
           textShadowBlur: 3,
@@ -656,22 +569,11 @@ function renderRegionGroupDrillDown(regionGroup) {
 
   echarts.registerMap("region-group-drilldown", regionGeoJson);
 
-  // 从该大区的省份中随机选取 4 个作为城市散点
-  const shuffledProvinces = [...regionGroup.provinces].sort(function () {
-    return Math.random() - 0.5;
-  });
-  const selectedProvinces = shuffledProvinces.slice(0, Math.min(4, shuffledProvinces.length));
-
-  // 生成城市散点数据（使用省份中心点）
-  const regionScatterData = selectedProvinces.map(function (provinceName) {
-    const feature = provinceFeatures.find(function (f) {
-      return f.properties.name === provinceName;
+  // 从 props.scatterData 中筛选属于该大区省份的散点数据
+  const regionScatterData = props.scatterData.filter(function (point) {
+    return regionGroup.provinces.some(function (province) {
+      return point.region === province;
     });
-    const center = feature ? getFeatureCenter(feature) : null;
-    return {
-      name: provinceName,
-      value: center ? [center[0], center[1], 100] : [0, 0, 0],
-    };
   });
 
   // 为大区内各省份生成数据
@@ -706,18 +608,10 @@ function renderRegionGroupDrillDown(regionGroup) {
           }
           return html;
         }
-        const region = getProvinceRegion(params.name);
-        if (region && region.tooltip) {
-          let html = '<div style="color: #fff; font-size: 14px; font-weight: bold; margin-bottom: 10px;">' + params.name + '</div>';
-          region.tooltip.forEach(function(item) {
-            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">' + item.name + '：<span style="color: #00ffcc;">' + item.value + '</span></div>';
-          });
-          return html;
-        }
-        return '<div style="color: #fff;">' + params.name + '</div>';
+        return '';
       },
-      position: function (point, params, dom, rect, size) {
-        return [point[0], point[1] - 20];
+      position: function (point) {
+        return [point[0]-80, point[1] - 150];
       },
     },
     geo3D: {
@@ -736,6 +630,7 @@ function renderRegionGroupDrillDown(regionGroup) {
         type: "map3D",
         map: "region-group-drilldown",
         roam: true,
+        tooltip: { show: false },
         viewControl: REGION_VIEW_CONTROL,
         itemStyle: {
           ...ITEM_STYLE_REGION,
@@ -749,16 +644,27 @@ function renderRegionGroupDrillDown(regionGroup) {
       {
         type: "scatter3D",
         coordinateSystem: "geo3D",
-        symbol: 'image://' + stationIcon,
-        symbolSize: 40,
+        symbolSize: 15,
         zlevel: 99,
         geo3DIndex: 0,
         silent: false,
         itemStyle: {
           opacity: 1,
+          borderColor: "#fff",
+          borderWidth: 1,
+          color: function (params) {
+            return params.data && params.data.status === 1 ? "#52c41a" : "#fa8c16";
+          },
+        },
+        emphasis: {
+          itemStyle: {
+            opacity: 1,
+            borderColor: "#fff",
+            borderWidth: 2,
+          },
         },
         label: {
-          show: true,
+          show: false,
           color: "#fff",
           fontSize: 12,
           textShadowColor: "#000",
@@ -806,6 +712,7 @@ function setupRegionGroupDrillDownEvents(regionGeoJson) {
     });
 
     regionGroupChartInstance.setOption({
+      seriesIndex: 0,
       series: [{ data: currentData }]
     });
 
@@ -825,6 +732,7 @@ function setupRegionGroupDrillDownEvents(regionGeoJson) {
     });
 
     regionGroupChartInstance.setOption({
+      seriesIndex: 0,
       series: [{ data: currentData }]
     });
 
@@ -885,8 +793,8 @@ async function renderRegionMap(adcode, name) {
         }
         return '';
       },
-      position: function (point, params, dom, rect, size) {
-        return [point[0], point[1] - 20];
+      position: function (point) {
+        return [point[0]-80, point[1] - 150];
       },
     },
     geo3D: {
@@ -929,10 +837,12 @@ async function renderRegionMap(adcode, name) {
           color: function (params) {
             return params.data && params.data.status === 1 ? "#52c41a" : "#fa8c16";
           },
+           borderColor: "#fff",
+          borderWidth: 1,
           opacity: 1,
         },
         label: {
-          show: true,
+          show: false,
           color: "#fff",
           textShadowColor: "#000",
           textShadowBlur: 3,
@@ -1195,6 +1105,7 @@ function toggleRegionMode() {
     showRegionColors.value = true;
     showLegend.value = true;
     renderRegionGroupMap();
+    emitViewStateChange();
   } else {
     // 关闭大区模式：返回全国地图
     // 清理大区地图实例
@@ -1213,6 +1124,7 @@ function toggleRegionMode() {
     showRegionColors.value = false;
     showLegend.value = false;
     renderChinaMap();
+    emitViewStateChange();
   }
 
   console.log('showLegend.value----', showLegend.value)
@@ -1245,7 +1157,7 @@ function showRegionDistribution() {
 
   // 更新大区颜色状态
   if (props.scatterData.length > 0) {
-    REGION_GROUPS.value = REGION_GROUPS.value.map(function (group) {
+    const updatedGroups = props.regionGroups.map(function (group) {
       const hasData = group.provinces.some(function (province) {
         return props.scatterData.some(function (point) {
           const dataProvince = getProvinceFromCity(point.name);
@@ -1257,13 +1169,15 @@ function showRegionDistribution() {
         colorStatus: hasData
       };
     });
+    emit("update:regionGroups", updatedGroups);
   } else {
-    REGION_GROUPS.value = REGION_GROUPS.value.map(function (group) {
+    const updatedGroups = props.regionGroups.map(function (group) {
       return {
         ...group,
         colorStatus: true
       };
     });
+    emit("update:regionGroups", updatedGroups);
   }
 
   // 如果不在大区模式，切换容器
@@ -1274,14 +1188,15 @@ function showRegionDistribution() {
   }
 
   renderRegionGroupMap();
+  emitViewStateChange();
 
   console.log('showLegend.value----', showLegend.value)
 }
 
 // 获取省份所属大区
 function getProvinceRegion(provinceName) {
-  for (let i = 0; i < REGION_GROUPS.value.length; i++) {
-    const group = REGION_GROUPS.value[i];
+  for (let i = 0; i < props.regionGroups.length; i++) {
+    const group = props.regionGroups[i];
     if (group.provinces.includes(provinceName)) {
       return group;
     }
@@ -1474,30 +1389,36 @@ function goBack() {
   }
 }
 
-function handleRegionClick(region, index) {
-  // 切换大区选中状态
-  REGION_GROUPS.value[index].colorStatus = !region.colorStatus;
+// 监听 regionGroups prop 变化，大区模式下自动重新渲染地图刷新颜色
+watch(() => props.regionGroups, function () {
+  if (!showRegions.value) return;
+  nextTick(function () {
+    if (regionGroupLevel.value === 'china') {
+      renderRegionGroupMap();
+    } else if (regionGroupLevel.value === 'region' && currentRegionGroup.value) {
+      renderRegionGroupDrillDown(currentRegionGroup.value);
+    }
+  });
+}, { deep: true });
 
-  // 更新地图显示
-  if (showRegions.value && regionGroupChartInstance) {
-    // 大区模式：更新大区地图
-    renderRegionGroupMap();
-  } else if (showRegionColors.value && chartInstance) {
-    // 业务大区分布模式（在中国地图上）：更新中国地图颜色
-    renderChinaMap();
-  }
-}
+// 监听 scatterData prop 变化，数据更新时重新渲染当前地图
+watch(() => props.scatterData, function () {
+  nextTick(function () {
+    if (!showRegions.value) {
+      renderChinaMap();
+    } else if (regionGroupLevel.value === 'china') {
+      renderRegionGroupMap();
+    } else if (regionGroupLevel.value === 'region' && currentRegionGroup.value) {
+      renderRegionGroupDrillDown(currentRegionGroup.value);
+    }
+  });
+}, { deep: true });
 
 // 暴露方法给父组件
 defineExpose({
   goBack,
   toggleRegionMode,
   showRegionDistribution,
-  handleRegionClick,
-  REGION_GROUPS,
-  showRegionColors,
-  showLegend,
-  showRegions,
 });
 
 onMounted(function () {

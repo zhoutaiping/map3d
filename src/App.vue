@@ -12,7 +12,10 @@
     <China3DMap
       ref="mapRef"
       :scatterData="chinaCityData"
+      :regionGroups="regionGroups"
       @region-change="handleRegionChange"
+      @view-state-change="handleViewStateChange"
+      @update:regionGroups="handleRegionGroupsUpdate"
     />
     
     <div class="control-panel">
@@ -26,7 +29,7 @@
     
     <div v-if="showLegend" class="legend">
       <div v-for="(region, index) in regionGroups" :key="region.name" class="legend-item"
-        @click="handleRegionClick(region, index)">
+        @click="toggleRegionColorStatus(index)">
         <span class="legend-color" :style="{ backgroundColor: region.colorStatus ? region.color : 'darkgray' }"></span>
         <span class="legend-text">{{ region.name }}</span>
       </div>
@@ -35,6 +38,9 @@
 </template>
 
 <script setup>
+import { ref, computed } from 'vue'
+import China3DMap from './components/China3DMap.vue'
+
 const INITIAL_CITY_DATA = [
   { name: "广州", value: [113.264385, 23.129112, 0], status: 1, region: '广东省', totalScale: '500 kW', dailyGeneration: '80 kWh', equivalentHours: '6 h' },
   { name: "深圳", value: [114.057865, 22.543099, 0], status: 1, region: '广东省', totalScale: '480 kW', dailyGeneration: '75 kWh', equivalentHours: '5.8 h' },
@@ -46,23 +52,75 @@ const INITIAL_CITY_DATA = [
   { name: "南京", value: [118.796877, 32.060255, 0], status: 1, region: '江苏省', totalScale: '400 kW', dailyGeneration: '60 kWh', equivalentHours: '5.2 h' },
 ]
 
-
+const INITIAL_REGION_GROUPS = [
+  // {
+  //   name: "西北大区",
+  //   color: "#3A936C",
+  //   colorStatus: true,
+  //   provinces: ["新疆维吾尔自治区"],
+  //   tooltip: [
+  //     { name: "总规模", value: "100 kW （个）" },
+  //     { name: "光伏", value: "100 kW （个）" },
+  //     { name: "发电", value: "100 kW （个）" },
+  //   ]
+  // },
+  {
+    name: "北方大区",
+    color: "#9EB46D",
+    colorStatus: true,
+    provinces: ["新疆维吾尔自治区", "北京市", "天津市", "河北省", "山东省", "山西省", "辽宁省", "吉林省", "黑龙江省", "甘肃省", "青海省", "宁夏回族自治区", "陕西省", "内蒙古自治区", "四川省", "西藏自治区"],
+    tooltip: [
+      { name: "总规模", value: "100 kW （个）" },
+      { name: "光伏", value: "100 kW （个）" },
+      { name: "发电", value: "100 kW （个）" },
+    ]
+  },
+  {
+    name: "南方大区",
+    color: "#3F8BCF",
+    colorStatus: true,
+    provinces: ["江苏省", "上海市", "浙江省", "福建省", "江西省", "广东省", "广西壮族自治区", "海南省", "香港特别行政区", "澳门特别行政区"],
+    tooltip: [
+      { name: "总规模", value: "100 kW （个）" },
+      { name: "光伏", value: "100 kW （个）" },
+      { name: "发电", value: "100 kW （个）" },
+    ]
+  },
+  {
+    name: "西南大区",
+    color: "#987E53",
+    colorStatus: true,
+    provinces: ["重庆市", "贵州省", "云南省"],
+    tooltip: [
+      { name: "总规模", value: "100 kW （个）" },
+      { name: "光伏", value: "100 kW （个）" },
+      { name: "发电", value: "100 kW （个）" },
+    ]
+  },
+  {
+    name: "中原大区",
+    color: "#9D625D",
+    colorStatus: true,
+    provinces: ["湖北省", "安徽省", "湖南省", "河南省"],
+    tooltip: [
+      { name: "总规模", value: "100 kW （个）" },
+      { name: "光伏", value: "100 kW （个）" },
+      { name: "发电", value: "100 kW （个）" },
+    ]
+  },
+]
 
 const INITIAL_REGION = { level: 'china', name: '', stack: [] }
 
-import { ref, computed } from 'vue'
-import China3DMap from './components/China3DMap.vue'
-
 const mapRef = ref(null)
 const currentRegion = ref(INITIAL_REGION)
-
 const chinaCityData = ref(INITIAL_CITY_DATA)
+const regionGroups = ref(JSON.parse(JSON.stringify(INITIAL_REGION_GROUPS)))
 
-// 从组件获取大区相关状态
+// 视图状态（由子组件通过事件驱动更新）
 const isRegionMode = ref(false)
 const showRegionColors = ref(false)
 const showLegend = ref(false)
-const regionGroups = ref([])
 
 const displayPath = computed(() => {
   const path = ['中国', ...currentRegion.value.stack.map(s => s.name)]
@@ -71,71 +129,39 @@ const displayPath = computed(() => {
 
 function handleRegionChange(region) {
   currentRegion.value = region
+}
 
-  // 同步大区相关状态
-  if (mapRef.value) {
-    isRegionMode.value = mapRef.value.showRegions
-    showRegionColors.value = mapRef.value.showRegionColors
-    
-    // 根据层级决定是否显示图例
-    // 只在大区全国地图（region-group）时显示图例
-    if (region.level === 'region') {
-      showLegend.value = false
-    } else if (region.level === 'region-province') {
-      showLegend.value = false
-    } else {
-      showLegend.value = mapRef.value.showLegend
-    }
-    
-    regionGroups.value = mapRef.value.REGION_GROUPS
-  }
+function handleViewStateChange(state) {
+  isRegionMode.value = state.showRegions
+  showRegionColors.value = state.showRegionColors
+  showLegend.value = state.showLegend
+}
+
+function handleRegionGroupsUpdate(newGroups) {
+  regionGroups.value = newGroups
 }
 
 function goBack() {
   if (mapRef.value) {
     mapRef.value.goBack()
-    // 返回后同步状态
-    setTimeout(() => {
-      if (mapRef.value) {
-        isRegionMode.value = mapRef.value.showRegions
-        showRegionColors.value = mapRef.value.showRegionColors
-        showLegend.value = mapRef.value.showLegend
-        regionGroups.value = mapRef.value.REGION_GROUPS
-      }
-    }, 100)
   }
 }
 
-// 切换大区模式（全部按钮）
 function toggleRegionMode() {
   if (mapRef.value) {
     mapRef.value.toggleRegionMode()
-    // 同步状态
-    isRegionMode.value = mapRef.value.showRegions
-    showRegionColors.value = mapRef.value.showRegionColors
-    showLegend.value = mapRef.value.showLegend
   }
 }
 
-// 显示业务大区分布（业务大区分布按钮）
 function showRegionDistribution() {
   if (mapRef.value) {
     mapRef.value.showRegionDistribution()
-    // 同步状态
-    isRegionMode.value = mapRef.value.showRegions
-    showRegionColors.value = mapRef.value.showRegionColors
-    showLegend.value = mapRef.value.showLegend
-    regionGroups.value = mapRef.value.REGION_GROUPS
   }
 }
 
-// 处理大区图例点击
-function handleRegionClick(region, index) {
-  if (mapRef.value) {
-    mapRef.value.handleRegionClick(region, index)
-    // 同步状态
-    regionGroups.value = mapRef.value.REGION_GROUPS
-  }
+function toggleRegionColorStatus(index) {
+  regionGroups.value[index].colorStatus = !regionGroups.value[index].colorStatus
+  regionGroups.value = [...regionGroups.value]
 }
 </script>
 
@@ -154,7 +180,6 @@ function handleRegionClick(region, index) {
 
 .header {
   position: fixed;
-  top: 50px;
   left: 0;
   right: 0;
   z-index: 1000;
