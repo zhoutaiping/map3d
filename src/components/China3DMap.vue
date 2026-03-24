@@ -347,15 +347,7 @@ function renderChinaMap(resetRegionState = false) {
           }
           return html;
         }
-        const region = getProvinceRegion(params.name);
-        if (region && region.tooltip) {
-          let html = '<div style="color: #fff; font-size: 14px; font-weight: bold; margin-bottom: 10px;">' + params.name + '</div>';
-          region.tooltip.forEach(function(item) {
-            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">' + item.name + '：<span style="color: #00ffcc;">' + item.value + '</span></div>';
-          });
-          return html;
-        }
-        return '<div style="color: #fff;">' + params.name + '</div>';
+        return '';
       },
     },
     geo3D: {
@@ -891,16 +883,7 @@ async function renderRegionMap(adcode, name) {
           }
           return html;
         }
-        const provinceName = name;
-        const region = getProvinceRegion(provinceName);
-        if (region && region.tooltip) {
-          let html = '<div style="color: #fff; font-size: 14px; font-weight: bold; margin-bottom: 10px;">' + params.name + '</div>';
-          region.tooltip.forEach(function(item) {
-            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">' + item.name + '：<span style="color: #00ffcc;">' + item.value + '</span></div>';
-          });
-          return html;
-        }
-        return '<div style="color: #fff;">' + params.name + '</div>';
+        return '';
       },
       position: function (point, params, dom, rect, size) {
         return [point[0], point[1] - 20];

@@ -15,7 +15,6 @@
       @region-change="handleRegionChange"
     />
     
-    <!-- 左下角控制按钮 -->
     <div class="control-panel">
       <button class="region-btn" :class="{ active: isRegionMode }" @click="toggleRegionMode">
         {{ isRegionMode ? "返回全国" : "全部" }}
@@ -25,7 +24,6 @@
       </button>
     </div>
     
-    <!-- 右下角大区图例 -->
     <div v-if="showLegend" class="legend">
       <div v-for="(region, index) in regionGroups" :key="region.name" class="legend-item"
         @click="handleRegionClick(region, index)">
@@ -37,10 +35,6 @@
 </template>
 
 <script setup>
-// 常量定义
-// 模拟城市标记点数据（中国地图）
-// 数值 >= 100 的点用绿色显示，< 100 的点用黄色显示
-// 格式: [{ name: "城市名", value: [经度, 纬度, 数值], totalScale: "", dailyGeneration: "", equivalentHours: "" }]
 const INITIAL_CITY_DATA = [
   { name: "广州", value: [113.264385, 23.129112, 0], status: 1, region: '广东省', totalScale: '500 kW', dailyGeneration: '80 kWh', equivalentHours: '6 h' },
   { name: "深圳", value: [114.057865, 22.543099, 0], status: 1, region: '广东省', totalScale: '480 kW', dailyGeneration: '75 kWh', equivalentHours: '5.8 h' },
