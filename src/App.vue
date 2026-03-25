@@ -9,7 +9,7 @@
         {{ displayPath }}
       </div>
     </div>
-    <div style="width: 80%; height: 80%; margin: 0 auto; position: absolute; left: 10%;" :style="{
+    <div style="width: 80%; height: 90%; margin: 0 auto; position: absolute; left: 10%;" :style="{
       backgroundImage: mapBg
     }" class="mapBox">
       <China3DMap ref="mapRef" :scatterData="chinaCityData" :regionGroups="regionGroups"

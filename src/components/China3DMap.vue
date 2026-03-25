@@ -180,6 +180,7 @@ const regionGroupLevel = ref('china'); // 'china' | 'region' (大区全国 | 大
 // 背景图缩放
 const bgScale = ref(1);
 const mapBoxRef = ref(null);
+const bgLoaded = ref(false);
 
 // ==================== 核心功能函数 ====================
 
@@ -263,7 +264,7 @@ function renderChinaMap(resetRegionState = false) {
       borderColor: 'transparent',
       borderWidth: 0,
       position: function (point) {
-        return [point[0]-80, point[1] - 160];
+        return [point[0]-100, point[1] - 180];
       },
       extraCssText: 'background: url(' + tooltipBg + ') no-repeat center center; background-size: 100% 100%; padding: 15px 20px; box-shadow: none;min-width:200px;',
       formatter: function (params) {
@@ -438,7 +439,7 @@ function renderRegionGroupMap() {
         return '<div style="color: #fff;">' + params.name + '</div>';
       },
       position: function (point) {
-        return [point[0]-80, point[1] - 160];
+        return [point[0]-100, point[1] - 180];
       },
     },
     geo3D: {
@@ -645,7 +646,7 @@ function renderRegionGroupDrillDown(regionGroup) {
         return '';
       },
       position: function (point) {
-        return [point[0]-80, point[1] - 160];
+        return [point[0]-100, point[1] - 180];
       },
     },
     geo3D: {
@@ -834,7 +835,7 @@ async function renderRegionMap(adcode, name) {
         return '';
       },
       position: function (point) {
-        return [point[0]-80, point[1] - 160];
+        return [point[0]-100, point[1] - 180];
       },
     },
     geo3D: {
@@ -1452,7 +1453,25 @@ defineExpose({
 });
 
 onMounted(function () {
-  initMap();
+  // 预加载背景图，加载完成后再渲染地图
+  var img = new Image();
+  var timeout = setTimeout(function () {
+    // 3 秒超时兜底，避免图片加载失败导致页面卡死
+    bgLoaded.value = true;
+    initMap();
+  }, 3000);
+
+  img.onload = function () {
+    clearTimeout(timeout);
+    bgLoaded.value = true;
+    initMap();
+  };
+  img.onerror = function () {
+    clearTimeout(timeout);
+    bgLoaded.value = true;
+    initMap();
+  };
+  img.src = mapBg;
 });
 
 onBeforeUnmount(function () {
@@ -1481,6 +1500,7 @@ onBeforeUnmount(function () {
     backgroundImage: 'url(' + mapBg + ')',
     backgroundSize: (100 * bgScale) + '% ' + (100 * bgScale) + '%',
     backgroundPosition: 'center',
+    opacity: bgLoaded ? 1 : 0,
   }">
     <div class="map-container" ref="mapContainer"></div>
     <div class="region-group-container" ref="regionGroupContainer" :style="{ display: showRegions ? 'block' : 'none' }">
@@ -1496,6 +1516,8 @@ onBeforeUnmount(function () {
   width: 100%;
   height: 100%;
   overflow: hidden;
+  opacity: 0;
+  transition: opacity 0.3s ease;
 }
 
 .map-container {
