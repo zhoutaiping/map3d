@@ -5,7 +5,10 @@ import "echarts-gl";
 import chinaJson from "../../public/maps/china.json";
 import tooltipBg from "../assets/toolbg.png";
 import stationIcon from "../assets/statation.png";
-import mapBg from "../assets/mapBg.png";
+
+import mapBgDefault from "../assets/mapBgDefault.jpeg";
+import mapBgChinaActive from "../assets/mapBgChina.jpg";
+import mapBgRegion from "../assets/mapBgRegion.png";
 
 const emit = defineEmits(["region-change", "view-state-change", "update:regionGroups"]);
 const props = defineProps({
@@ -53,7 +56,7 @@ const REGION_VIEW_CONTROL = {
 
 const ITEM_STYLE_CHINA = {
   color: "rgb(68, 133, 158)",
-  opacity: 1,
+  opacity: 0.8,
   borderWidth: 1,
   borderColor: "#ffffff",
 };
@@ -70,7 +73,7 @@ const EMPHASIS_STYLE_CHINA = {
     color: "rgb(68, 133, 158)",
     borderWidth: 2,
     borderColor: "#fff",
-    opacity: 1,
+    opacity: 0.8,
   },
   label: {
     show: true,
@@ -84,7 +87,7 @@ const EMPHASIS_STYLE_CHINA = {
 const EMPHASIS_STYLE_REGION = {
   itemStyle: {
     color: "#ff8c42",
-    opacity: 1,
+    opacity: 0.8,
   },
   label: {
     show: true,
@@ -127,6 +130,7 @@ const REALISTIC_MATERIAL = {
   roughness: 0.3,
   metalness: 0.4,
   metalnessRoughness: 0.5,
+  detailTexture: mapBgChinaActive,
 };
 
 const LABEL_CONFIG_CHINA = {
@@ -182,6 +186,9 @@ const bgScale = ref(1);
 const mapBoxRef = ref(null);
 const bgLoaded = ref(false);
 
+// 当前背景图（全国级/区域级动态切换）
+const currentBgImage = ref(mapBgDefault);
+
 // ==================== 核心功能函数 ====================
 
 // 创建基础配置
@@ -218,6 +225,7 @@ async function loadMapData(adcode, name) {
 function renderChinaMap(resetRegionState = false) {
   navigationStack.value = [];
   bgScale.value = 1;
+  currentBgImage.value = mapBgDefault;
   if (resetRegionState) {
     showRegions.value = false;
   }
@@ -340,7 +348,7 @@ function renderChinaMap(resetRegionState = false) {
         geo3DIndex: 0,
         silent: false,
         itemStyle: {
-          opacity: 1,
+          opacity: 0.8,
           color: function (params) {
             return params.data && params.data.stationType === '光伏' ? "#52c41a" : "#fa8c16";
           },
@@ -378,6 +386,7 @@ function renderRegionGroupMap() {
 
   regionGroupLevel.value = 'china';
   currentRegionGroup.value = null;
+  currentBgImage.value = mapBgDefault;
 
   // 触发 region-change 事件，通知父组件进入大区全国地图
   emit("region-change", {
@@ -484,7 +493,7 @@ function renderRegionGroupMap() {
         geo3DIndex: 0,
         silent: false,
         itemStyle: {
-          opacity: 1,
+          opacity: 0.8,
            color: function (params) {
             return params.data && params.data.stationType === '光伏' ? "#52c41a" : "#fa8c16";
           },
@@ -582,6 +591,7 @@ function setupRegionGroupMapEvents() {
 function renderRegionGroupDrillDown(regionGroup) {
   regionGroupLevel.value = 'region';
   currentRegionGroup.value = regionGroup;
+  currentBgImage.value = mapBgRegion;
 
   // 从 chinaJson 中筛选该大区的省份边界（不加载市级地图）
   const provinceFeatures = chinaJson.features.filter(function (f) {
@@ -672,6 +682,9 @@ function renderRegionGroupDrillDown(regionGroup) {
           color: regionGroup.color,
           areaColor: regionGroup.color,
         },
+        realisticMaterial: {
+          detailTexture: mapBgChinaActive,
+        },
         data: areaData,
         label: LABEL_CONFIG_REGION,
         emphasis: EMPHASIS_STYLE_REGION,
@@ -684,7 +697,7 @@ function renderRegionGroupDrillDown(regionGroup) {
         geo3DIndex: 0,
         silent: false,
         itemStyle: {
-          opacity: 1,
+          opacity: 0.8,
           borderColor: "#fff",
           borderWidth: 1,
           color: function (params) {
@@ -693,7 +706,7 @@ function renderRegionGroupDrillDown(regionGroup) {
         },
         emphasis: {
           itemStyle: {
-            opacity: 1,
+            opacity: 0.8,
             borderColor: "#fff",
             borderWidth: 2,
           },
@@ -780,6 +793,7 @@ function setupRegionGroupDrillDownEvents(regionGeoJson) {
 // 渲染区域地图（省份或市级）
 async function renderRegionMap(adcode, name) {
   showRegionButton.value = false;
+  currentBgImage.value = mapBgRegion;
 
   // 隐藏中国地图容器
   mapContainer.value.style.display = 'none';
@@ -880,7 +894,7 @@ async function renderRegionMap(adcode, name) {
           },
            borderColor: "#fff",
           borderWidth: 1,
-          opacity: 1,
+          opacity: 0.8,
         },
         label: {
           show: false,
@@ -1446,10 +1460,53 @@ watch(() => props.scatterData, function () {
 }, { deep: true });
 
 // 暴露方法给父组件
+// 切换全国背景图（供父组件按钮调用）
+function setChinaBg(isActive) {
+  currentBgImage.value = isActive ? mapBgChinaActive : mapBgDefault;
+
+  // 如果当前在省份下钻模式，清理省份地图并重渲染全国地图
+  if (regionMapContainer.value && regionMapContainer.value.classList.contains('active')) {
+    regionMapContainer.value.classList.remove('active');
+    if (regionChartInstance) {
+      regionChartInstance.clear();
+    }
+    navigationStack.value = [];
+    showRegionButton.value = true;
+    mapContainer.value.style.display = 'block';
+    renderChinaMap();
+    emitViewStateChange();
+    return;
+  }
+
+  // 如果当前在大区模式，清理大区地图并重渲染全国地图
+  if (showRegions.value) {
+    showRegions.value = false;
+    showRegionColors.value = false;
+    showLegend.value = false;
+    if (regionGroupChartInstance) {
+      regionGroupChartInstance.clear();
+    }
+    if (regionMapContainer.value) {
+      regionMapContainer.value.classList.remove('active');
+    }
+    navigationStack.value = [];
+    mapContainer.value.style.display = 'block';
+    regionGroupContainer.value.style.display = 'none';
+    renderChinaMap();
+    emitViewStateChange();
+    return;
+  }
+
+  if (chartInstance) {
+    chartInstance.resize();
+  }
+}
+
 defineExpose({
   goBack,
   toggleRegionMode,
   showRegionDistribution,
+  setChinaBg,
 });
 
 onMounted(function () {
@@ -1471,7 +1528,7 @@ onMounted(function () {
     bgLoaded.value = true;
     initMap();
   };
-  img.src = mapBg;
+  img.src = mapBgDefault;
 });
 
 onBeforeUnmount(function () {
@@ -1497,7 +1554,7 @@ onBeforeUnmount(function () {
 
 <template>
   <div class="mapBox" ref="mapBoxRef" :style="{
-    backgroundImage: 'url(' + mapBg + ')',
+    backgroundImage: 'url(' + currentBgImage + ')',
     backgroundSize: (100 * bgScale) + '% ' + (100 * bgScale) + '%',
     backgroundPosition: 'center',
     opacity: bgLoaded ? 1 : 0,
@@ -1524,7 +1581,10 @@ onBeforeUnmount(function () {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  position: relative;
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 10;
   background: transparent;
 }
 
@@ -1535,7 +1595,7 @@ onBeforeUnmount(function () {
   position: absolute;
   top: 0;
   left: 0;
-  z-index: 5;
+  z-index: 15;
   background: transparent;
 }
 
@@ -1546,7 +1606,7 @@ onBeforeUnmount(function () {
   position: absolute;
   top: 0;
   left: 0;
-  z-index: 10;
+  z-index: 20;
   display: none;
   background: transparent;
 }
@@ -1554,5 +1614,6 @@ onBeforeUnmount(function () {
 .region-map-container.active {
   display: block;
 }
+
 
 </style>

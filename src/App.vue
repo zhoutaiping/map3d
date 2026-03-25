@@ -3,24 +3,24 @@
     <div class="header">
       <h1>中国 3D 地图可视化</h1>
       <button v-if="currentRegion.name" @click="goBack" class="back-btn">
-        ← 返回
+        返回上一级
       </button>
       <div v-if="currentRegion.name" class="current-path">
         {{ displayPath }}
       </div>
     </div>
-    <div style="width: 80%; height: 90%; margin: 0 auto; position: absolute; left: 10%;" :style="{
-      backgroundImage: mapBg
-    }" class="mapBox">
+    <div style="width: 80%; height: 90%; margin: 0 auto; position: absolute; left: 10%;"  class="mapBox">
+      <img class="rotate-border rotate-border-1" :src="rotateBorder1Map" alt="" />
+      <img class="rotate-border rotate-border-2" :src="rotateBorder2Map" alt="" />
       <China3DMap ref="mapRef" :scatterData="chinaCityData" :regionGroups="regionGroups"
         :class="{ 'animate__animated': animating, 'animate__zoomIn': animating }" @region-change="handleRegionChange"
         @view-state-change="handleViewStateChange" @update:regionGroups="handleRegionGroupsUpdate"
         @animationend="handleAnimationEnd" />
       <div class="control-panel">
-        <button class="region-btn" :class="{ active: isRegionMode }" @click="toggleRegionMode">
-          {{ isRegionMode ? "显示/全国" : "隐藏/全国" }}
+        <button class="region-btn" id="chinaButn" :class="{ active: isChinaBgActive }" @click="toggleChinaBg">
+          {{ isChinaBgActive ? "隐藏/全国" : "显示/全国" }}
         </button>
-        <button class="region-btn" :class="{ active: showRegionColors }" @click="showRegionDistribution">
+        <button class="region-btn" id="regionGroupButn" :class="{ active: showRegionColors }" @click="showRegionDistribution">
           业务大区分布
         </button>
       </div>
@@ -42,7 +42,8 @@
 import { ref, computed } from 'vue'
 import China3DMap from './components/China3DMap.vue'
 import 'animate.css'
-import mapBg from '@/assets/mapBg.png'
+import rotateBorder1Map from "./assets/rotateBorder1Map.png";
+import rotateBorder2Map from "./assets/rotateBorder2Map.png";
 
 const INITIAL_CITY_DATA = [
   { stationType: '光伏', stationName: '广州电站', province: '广东省', latitude: 23.129112, longitude: 113.264385, hour: '6', capacity: 500, num: 2 },
@@ -135,6 +136,9 @@ const isRegionMode = ref(false)
 const showRegionColors = ref(false)
 const showLegend = ref(false)
 
+// 全国背景图切换状态
+const isChinaBgActive = ref(false)
+
 const displayPath = computed(() => {
   const path = ['中国', ...currentRegion.value.stack.map(s => s.name)]
   return path.join(' > ')
@@ -160,23 +164,10 @@ function goBack() {
   }
 }
 
-function toggleRegionMode() {
+function toggleChinaBg() {
+  isChinaBgActive.value = !isChinaBgActive.value
   if (mapRef.value) {
-    mapRef.value.toggleRegionMode()
-  }
-  // 切换后 isRegionMode 还未更新，通过取反判断
-  const willBeRegion = !isRegionMode.value
-  mapFlag.value = willBeRegion ? 'REGION' : 'PROVINCES'
-
-  if (willBeRegion) {
-    mockFetchRegionData().then(function (res) {
-      regionGroups.value = res.regionGroups
-      chinaCityData.value = res.scatterData
-    })
-  } else {
-    mockFetchChinaData().then(function (res) {
-      chinaCityData.value = res.scatterData
-    })
+    mapRef.value.setChinaBg(isChinaBgActive.value)
   }
 }
 
@@ -371,5 +362,45 @@ function mockFetchRegionData() {
 
 .legend-text {
   white-space: nowrap;
+}
+
+.mapBox {
+  overflow: hidden;
+}
+
+.rotate-border {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  pointer-events: none;
+  object-fit: contain;
+}
+
+.rotate-border-1 {
+  width: 85%;
+  height: 85%;
+  transform: translate(-50%, -50%);
+  z-index: 1;
+  animation: rotate-ccw 120s linear infinite;
+  opacity: .2;
+}
+
+.rotate-border-2 {
+  width: 80%;
+  height: 80%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  animation: rotate-cw 60s linear infinite;
+  opacity: .2;
+}
+
+@keyframes rotate-cw {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+@keyframes rotate-ccw {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(-360deg); }
 }
 </style>

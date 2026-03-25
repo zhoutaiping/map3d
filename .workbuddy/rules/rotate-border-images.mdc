@@ -1,0 +1,14 @@
+---
+description: 
+alwaysApply: true
+enabled: true
+updatedAt: 2026-03-25T07:32:05.877Z
+provider: 
+---
+
+# 旋转边框图片位置
+
+- rotateBorder1Map.png 和 rotateBorder2Map.png 放置在 App.vue 的 `class="mapBox"` div 内
+- China3DMap.vue 中已移除旋转边框相关代码
+- rotateBorder2Map.png 在用户口中也称 rotateBorder3Map
+- 顺时针: rotateBorder1Map, 逆时针: rotateBorder2Map
