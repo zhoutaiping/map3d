@@ -9,103 +9,111 @@
         {{ displayPath }}
       </div>
     </div>
-    <China3DMap
-      ref="mapRef"
-      :scatterData="chinaCityData"
-      :regionGroups="regionGroups"
-      @region-change="handleRegionChange"
-      @view-state-change="handleViewStateChange"
-      @update:regionGroups="handleRegionGroupsUpdate"
-    />
-    
-    <div class="control-panel">
-      <button class="region-btn" :class="{ active: isRegionMode }" @click="toggleRegionMode">
-        {{ isRegionMode ? "返回全国" : "全部" }}
-      </button>
-      <button class="region-btn" :class="{ active: showRegionColors }" @click="showRegionDistribution">
-        业务大区分布
-      </button>
-    </div>
-    
-    <div v-if="showLegend" class="legend">
-      <div v-for="(region, index) in regionGroups" :key="region.name" class="legend-item"
-        @click="toggleRegionColorStatus(index)">
-        <span class="legend-color" :style="{ backgroundColor: region.colorStatus ? region.color : 'darkgray' }"></span>
-        <span class="legend-text">{{ region.name }}</span>
+    <div style="width: 80%; height: 80%; margin: 0 auto; position: absolute; left: 10%;" :style="{
+      backgroundImage: mapBg
+    }" class="mapBox">
+      <China3DMap ref="mapRef" :scatterData="chinaCityData" :regionGroups="regionGroups"
+        :class="{ 'animate__animated': animating, 'animate__zoomIn': animating }" @region-change="handleRegionChange"
+        @view-state-change="handleViewStateChange" @update:regionGroups="handleRegionGroupsUpdate"
+        @animationend="handleAnimationEnd" />
+      <div class="control-panel">
+        <button class="region-btn" :class="{ active: isRegionMode }" @click="toggleRegionMode">
+          {{ isRegionMode ? "显示/全国" : "隐藏/全国" }}
+        </button>
+        <button class="region-btn" :class="{ active: showRegionColors }" @click="showRegionDistribution">
+          业务大区分布
+        </button>
+      </div>
+
+      <div v-if="showLegend" class="legend">
+        <div v-for="(region, index) in regionGroups" :key="region.nameType" class="legend-item"
+          @click="toggleRegionColorStatus(index)">
+          <span class="legend-color"
+            :style="{ backgroundColor: region.colorStatus ? region.color : 'darkgray' }"></span>
+          <span class="legend-text">{{ region.nameType }}</span>
+        </div>
       </div>
     </div>
+
   </div>
 </template>
 
 <script setup>
 import { ref, computed } from 'vue'
 import China3DMap from './components/China3DMap.vue'
+import 'animate.css'
+import mapBg from '@/assets/mapBg.png'
 
 const INITIAL_CITY_DATA = [
-  { name: "广州", value: [113.264385, 23.129112, 0], status: 1, region: '广东省', totalScale: '500 kW', dailyGeneration: '80 kWh', equivalentHours: '6 h' },
-  { name: "深圳", value: [114.057865, 22.543099, 0], status: 1, region: '广东省', totalScale: '480 kW', dailyGeneration: '75 kWh', equivalentHours: '5.8 h' },
-  { name: "成都", value: [104.066541, 30.572269, 0], status: 0, region: '四川省', totalScale: '320 kW', dailyGeneration: '45 kWh', equivalentHours: '4.2 h' },
-  { name: "杭州", value: [120.155072, 30.274068, 0], status: 1, region: '浙江省', totalScale: '420 kW', dailyGeneration: '65 kWh', equivalentHours: '5.5 h' },
-  { name: "武汉", value: [114.305464, 30.593087, 0], status: 0, region: '湖北省', totalScale: '380 kW', dailyGeneration: '55 kWh', equivalentHours: '4.8 h' },
-  { name: "西安", value: [108.940174, 34.341576, 0], status: 0, region: '陕西省', totalScale: '290 kW', dailyGeneration: '35 kWh', equivalentHours: '3.5 h' },
-  { name: "重庆", value: [106.551556, 29.563009, 0], status: 0, region: '重庆市', totalScale: '350 kW', dailyGeneration: '42 kWh', equivalentHours: '4.0 h' },
-  { name: "南京", value: [118.796877, 32.060255, 0], status: 1, region: '江苏省', totalScale: '400 kW', dailyGeneration: '60 kWh', equivalentHours: '5.2 h' },
+  { stationType: '光伏', stationName: '广州电站', province: '广东省', latitude: 23.129112, longitude: 113.264385, hour: '6', capacity: 500, num: 2 },
+  { stationType: '光伏', stationName: '深圳电站', province: '广东省', latitude: 22.543099, longitude: 114.057865, hour: '5.8', capacity: 480, num: 1 },
+  { stationType: '发电', stationName: '成都电站', province: '四川省', latitude: 30.572269, longitude: 104.066541, hour: '4.2', capacity: 320, num: 3 },
+  { stationType: '光伏', stationName: '杭州电站', province: '浙江省', latitude: 30.274068, longitude: 120.155072, hour: '5.5', capacity: 420, num: 2 },
+  { stationType: '发电', stationName: '武汉电站', province: '湖北省', latitude: 30.593087, longitude: 114.305464, hour: '4.8', capacity: 380, num: 4 },
+  { stationType: '发电', stationName: '西安电站', province: '陕西省', latitude: 34.341576, longitude: 108.940174, hour: '3.5', capacity: 290, num: 1 },
+  { stationType: '发电', stationName: '重庆电站', province: '重庆市', latitude: 29.563009, longitude: 106.551556, hour: '4.0', capacity: 350, num: 2 },
+  { stationType: '光伏', stationName: '南京电站', province: '江苏省', latitude: 32.060255, longitude: 118.796877, hour: '5.2', capacity: 400, num: 3 },
 ]
 
 const INITIAL_REGION_GROUPS = [
-  // {
-  //   name: "西北大区",
-  //   color: "#3A936C",
-  //   colorStatus: true,
-  //   provinces: ["新疆维吾尔自治区"],
-  //   tooltip: [
-  //     { name: "总规模", value: "100 kW （个）" },
-  //     { name: "光伏", value: "100 kW （个）" },
-  //     { name: "发电", value: "100 kW （个）" },
-  //   ]
-  // },
   {
-    name: "北方大区",
+    nameType: "北方大区",
     color: "#9EB46D",
     colorStatus: true,
-    provinces: ["新疆维吾尔自治区", "北京市", "天津市", "河北省", "山东省", "山西省", "辽宁省", "吉林省", "黑龙江省", "甘肃省", "青海省", "宁夏回族自治区", "陕西省", "内蒙古自治区", "四川省", "西藏自治区"],
-    tooltip: [
+    provinceList: ["新疆维吾尔自治区", "北京市", "天津市", "河北省", "山东省", "山西省", "辽宁省", "吉林省", "黑龙江省", "甘肃省", "青海省", "宁夏回族自治区", "陕西省", "内蒙古自治区", "四川省", "西藏自治区"],
+    list: [
       { name: "总规模", value: "100 kW （个）" },
       { name: "光伏", value: "100 kW （个）" },
       { name: "发电", value: "100 kW （个）" },
+    ],
+    stations: [
+      { stationType: '发电', stationName: '成都电站', province: '四川省', latitude: 30.572269, longitude: 104.066541, hour: '4.2', capacity: 320, num: 3 },
+      { stationType: '发电', stationName: '西安电站', province: '陕西省', latitude: 34.341576, longitude: 108.940174, hour: '3.5', capacity: 290, num: 1 },
     ]
   },
   {
-    name: "南方大区",
+    nameType: "南方大区",
     color: "#3F8BCF",
     colorStatus: true,
-    provinces: ["江苏省", "上海市", "浙江省", "福建省", "江西省", "广东省", "广西壮族自治区", "海南省", "香港特别行政区", "澳门特别行政区"],
-    tooltip: [
+    provinceList: ["江苏省", "上海市", "浙江省", "福建省", "江西省", "广东省", "广西壮族自治区", "海南省", "香港特别行政区", "澳门特别行政区"],
+    list: [
       { name: "总规模", value: "100 kW （个）" },
       { name: "光伏", value: "100 kW （个）" },
       { name: "发电", value: "100 kW （个）" },
+    ],
+    stations: [
+      { stationType: '光伏', stationName: '广州电站', province: '广东省', latitude: 23.129112, longitude: 113.264385, hour: '6', capacity: 500, num: 2 },
+      { stationType: '光伏', stationName: '深圳电站', province: '广东省', latitude: 22.543099, longitude: 114.057865, hour: '5.8', capacity: 480, num: 1 },
+      { stationType: '光伏', stationName: '杭州电站', province: '浙江省', latitude: 30.274068, longitude: 120.155072, hour: '5.5', capacity: 420, num: 2 },
+      { stationType: '光伏', stationName: '南京电站', province: '江苏省', latitude: 32.060255, longitude: 118.796877, hour: '5.2', capacity: 400, num: 3 },
     ]
   },
   {
-    name: "西南大区",
+    nameType: "西南大区",
     color: "#987E53",
     colorStatus: true,
-    provinces: ["重庆市", "贵州省", "云南省"],
-    tooltip: [
+    provinceList: ["重庆市", "贵州省", "云南省"],
+    list: [
       { name: "总规模", value: "100 kW （个）" },
       { name: "光伏", value: "100 kW （个）" },
       { name: "发电", value: "100 kW （个）" },
+    ],
+    stations: [
+      { stationType: '发电', stationName: '重庆电站', province: '重庆市', latitude: 29.563009, longitude: 106.551556, hour: '4.0', capacity: 350, num: 2 },
     ]
   },
   {
-    name: "中原大区",
+    nameType: "中原大区",
     color: "#9D625D",
     colorStatus: true,
-    provinces: ["湖北省", "安徽省", "湖南省", "河南省"],
-    tooltip: [
+    provinceList: ["湖北省", "安徽省", "湖南省", "河南省"],
+    list: [
       { name: "总规模", value: "100 kW （个）" },
       { name: "光伏", value: "100 kW （个）" },
       { name: "发电", value: "100 kW （个）" },
+    ],
+    stations: [
+      { stationType: '发电', stationName: '武汉电站', province: '湖北省', latitude: 30.593087, longitude: 114.305464, hour: '4.8', capacity: 380, num: 4 },
     ]
   },
 ]
@@ -114,9 +122,14 @@ const INITIAL_REGION = { level: 'china', name: '', stack: [] }
 
 const mapRef = ref(null)
 const currentRegion = ref(INITIAL_REGION)
-const chinaCityData = ref(INITIAL_CITY_DATA)
+const chinaCityData = ref([])
 const regionGroups = ref(JSON.parse(JSON.stringify(INITIAL_REGION_GROUPS)))
+const mapFlag = ref('PROVINCES')
 
+
+setTimeout(() => {
+  chinaCityData.value = INITIAL_CITY_DATA
+}, 200);
 // 视图状态（由子组件通过事件驱动更新）
 const isRegionMode = ref(false)
 const showRegionColors = ref(false)
@@ -151,18 +164,63 @@ function toggleRegionMode() {
   if (mapRef.value) {
     mapRef.value.toggleRegionMode()
   }
-}
+  // 切换后 isRegionMode 还未更新，通过取反判断
+  const willBeRegion = !isRegionMode.value
+  mapFlag.value = willBeRegion ? 'REGION' : 'PROVINCES'
 
-function showRegionDistribution() {
-  if (mapRef.value) {
-    mapRef.value.showRegionDistribution()
+  if (willBeRegion) {
+    mockFetchRegionData().then(function (res) {
+      regionGroups.value = res.regionGroups
+      chinaCityData.value = res.scatterData
+    })
+  } else {
+    mockFetchChinaData().then(function (res) {
+      chinaCityData.value = res.scatterData
+    })
   }
 }
 
-function toggleRegionColorStatus(index) {
-  regionGroups.value[index].colorStatus = !regionGroups.value[index].colorStatus
-  regionGroups.value = [...regionGroups.value]
+function showRegionDistribution() {
+  mapFlag.value = 'REGION'
+  if (mapRef.value) {
+    mapRef.value.showRegionDistribution()
+  }
+  mockFetchRegionData().then(function (res) {
+    regionGroups.value = res.regionGroups
+    chinaCityData.value = res.scatterData
+  })
 }
+
+function toggleRegionColorStatus(index) {
+  setTimeout(() => {
+    regionGroups.value[index].colorStatus = !regionGroups.value[index].colorStatus
+    regionGroups.value = [...regionGroups.value]
+  }, 200);
+}
+
+// 模拟接口：获取全国散点数据
+function mockFetchChinaData() {
+  return new Promise(function (resolve) {
+    setTimeout(function () {
+      resolve({
+        scatterData: JSON.parse(JSON.stringify(INITIAL_CITY_DATA))
+      })
+    }, 300)
+  })
+}
+
+// 模拟接口：获取大区分组 + 散点数据
+function mockFetchRegionData() {
+  return new Promise(function (resolve) {
+    setTimeout(function () {
+      resolve({
+        regionGroups: JSON.parse(JSON.stringify(INITIAL_REGION_GROUPS)),
+        scatterData: JSON.parse(JSON.stringify(INITIAL_CITY_DATA))
+      })
+    }, 300)
+  })
+}
+
 </script>
 
 <style scoped>
@@ -229,7 +287,7 @@ function toggleRegionColorStatus(index) {
 
 /* 左下角控制按钮 */
 .control-panel {
-  position: fixed;
+  position: absolute;
   bottom: 80px;
   left: 50px;
   z-index: 1000;
@@ -263,13 +321,12 @@ function toggleRegionColorStatus(index) {
 
 /* 右下角大区图例 */
 .legend {
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(10px);
+  background: transparent;
   padding: 12px;
   border-radius: 8px;
-  position: fixed;
+  position: absolute;
   bottom: 80px;
-  right: 80px;
+  right: 0px;
   z-index: 1000;
   min-width: 120px;
 }

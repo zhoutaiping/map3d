@@ -5,6 +5,7 @@ import "echarts-gl";
 import chinaJson from "../../public/maps/china.json";
 import tooltipBg from "../assets/toolbg.png";
 import stationIcon from "../assets/statation.png";
+import mapBg from "../assets/mapBg.png";
 
 const emit = defineEmits(["region-change", "view-state-change", "update:regionGroups"]);
 const props = defineProps({
@@ -143,6 +144,25 @@ const LABEL_CONFIG_REGION = {
   fontSize: 13,
 };
 
+// 将新 station 格式转为 ECharts scatter3D 所需格式
+function transformStationsToScatter(stations) {
+  if (!stations || !Array.isArray(stations)) return [];
+  return stations.map(function (s) {
+    return {
+      name: s.stationName || '',
+      value: [s.longitude || 0, s.latitude || 0, 0],
+      stationType: s.stationType,
+      stationName: s.stationName,
+      province: s.province,
+      latitude: s.latitude,
+      longitude: s.longitude,
+      hour: s.hour,
+      capacity: s.capacity,
+      num: s.num,
+    };
+  });
+}
+
 // =================== 响应式变量 ====================
 const mapContainer = ref(null);
 const regionMapContainer = ref(null);
@@ -157,12 +177,16 @@ let highlightedRegion = null;
 const currentRegionGroup = ref(null);  // 当前选中大区
 const regionGroupLevel = ref('china'); // 'china' | 'region' (大区全国 | 大区省份)
 
+// 背景图缩放
+const bgScale = ref(1);
+const mapBoxRef = ref(null);
+
 // ==================== 核心功能函数 ====================
 
 // 创建基础配置
 function createBaseOption(backgroundColor) {
   return {
-    backgroundColor: backgroundColor || "#000",
+    backgroundColor: backgroundColor || "transparent",
     tooltip: {
       show: true,
       trigger: "item",
@@ -192,6 +216,7 @@ async function loadMapData(adcode, name) {
 // 渲染中国地图
 function renderChinaMap(resetRegionState = false) {
   navigationStack.value = [];
+  bgScale.value = 1;
   if (resetRegionState) {
     showRegions.value = false;
   }
@@ -223,9 +248,9 @@ function renderChinaMap(resetRegionState = false) {
       extraCssText: 'background: url(' + tooltipBg + ') no-repeat center center; background-size: 100% 100%; padding: 15px 20px; box-shadow: none;',
       formatter: function (params) {
         const region = getProvinceRegion(params.name);
-        if (region && region.tooltip) {
-          let html = '<div style="color: #fff; font-size: 14px; font-weight: bold; margin-bottom: 10px;">' + region.name + '</div>';
-          region.tooltip.forEach(function(item) {
+        if (region && region.list) {
+          let html = '<div style="color: #fff; font-size: 14px; font-weight: bold; margin-bottom: 10px;">' + region.nameType + '</div>';
+          region.list.forEach(function(item) {
             html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">' + item.name + '：<span style="color: #00ffcc;">' + item.value + '</span></div>';
           });
           return html;
@@ -244,15 +269,18 @@ function renderChinaMap(resetRegionState = false) {
       formatter: function (params) {
         if (params.seriesType === 'scatter3D') {
           const data = params.data;
-          let html = '<div style="color: #fff; font-size: 14px; font-weight: bold; margin-bottom: 10px;">' + (data.name || params.name) + '</div>';
-          if (data.totalScale !== undefined) {
-            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">总规模：<span style="color: #00ffcc;">' + data.totalScale + '</span></div>';
+          let html = '<div style="color: #fff; font-size: 14px; font-weight: bold; margin-bottom: 10px;">' + (data.stationName || params.name) + '</div>';
+          if (data.stationType !== undefined) {
+            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">类型：<span style="color: #00ffcc;">' + data.stationType + '</span></div>';
           }
-          if (data.dailyGeneration !== undefined) {
-            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">当日发电量：<span style="color: #00ffcc;">' + data.dailyGeneration + '</span></div>';
+          if (data.capacity !== undefined) {
+            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">发电规模：<span style="color: #00ffcc;">' + data.capacity + ' kW</span></div>';
           }
-          if (data.equivalentHours !== undefined) {
-            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">等效利用小时：<span style="color: #00ffcc;">' + data.equivalentHours + '</span></div>';
+          if (data.hour !== undefined) {
+            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">发电小时：<span style="color: #00ffcc;">' + data.hour + ' h</span></div>';
+          }
+          if (data.num !== undefined) {
+            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">数量：<span style="color: #00ffcc;">' + data.num + '</span></div>';
           }
           return html;
         }
@@ -313,7 +341,7 @@ function renderChinaMap(resetRegionState = false) {
         itemStyle: {
           opacity: 1,
           color: function (params) {
-            return params.data && params.data.status === 1 ? "#52c41a" : "#fa8c16";
+            return params.data && params.data.stationType === '光伏' ? "#52c41a" : "#fa8c16";
           },
           borderColor: "#fff",
           borderWidth: 1,
@@ -327,7 +355,7 @@ function renderChinaMap(resetRegionState = false) {
             return params.name;
           },
         },
-        data: props.scatterData,
+        data: transformStationsToScatter(props.scatterData),
         shading: "lambert",
       },
     ],
@@ -384,22 +412,25 @@ function renderRegionGroupMap() {
       formatter: function (params) {
         if (params.seriesType === 'scatter3D') {
           const data = params.data;
-          let html = '<div style="color: #fff; font-size: 14px; font-weight: bold; margin-bottom: 10px;">' + (data.name || params.name) + '</div>';
-          if (data.totalScale !== undefined) {
-            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">总规模：<span style="color: #00ffcc;">' + data.totalScale + '</span></div>';
+          let html = '<div style="color: #fff; font-size: 14px; font-weight: bold; margin-bottom: 10px;">' + (data.stationName || params.name) + '</div>';
+          if (data.stationType !== undefined) {
+            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">类型：<span style="color: #00ffcc;">' + data.stationType + '</span></div>';
           }
-          if (data.dailyGeneration !== undefined) {
-            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">当日发电量：<span style="color: #00ffcc;">' + data.dailyGeneration + '</span></div>';
+          if (data.capacity !== undefined) {
+            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">发电规模：<span style="color: #00ffcc;">' + data.capacity + ' kW</span></div>';
           }
-          if (data.equivalentHours !== undefined) {
-            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">等效利用小时：<span style="color: #00ffcc;">' + data.equivalentHours + '</span></div>';
+          if (data.hour !== undefined) {
+            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">发电小时：<span style="color: #00ffcc;">' + data.hour + ' h</span></div>';
+          }
+          if (data.num !== undefined) {
+            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">数量：<span style="color: #00ffcc;">' + data.num + '</span></div>';
           }
           return html;
         }
         const region = getProvinceRegion(params.name);
-        if (region && region.tooltip) {
-          let html = '<div style="color: #fff; font-size: 14px; font-weight: bold; margin-bottom: 10px;">' + region.name + '</div>';
-          region.tooltip.forEach(function(item) {
+        if (region && region.list) {
+          let html = '<div style="color: #fff; font-size: 14px; font-weight: bold; margin-bottom: 10px;">' + region.nameType + '</div>';
+          region.list.forEach(function(item) {
             html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">' + item.name + '：<span style="color: #00ffcc;">' + item.value + '</span></div>';
           });
           return html;
@@ -454,7 +485,7 @@ function renderRegionGroupMap() {
         itemStyle: {
           opacity: 1,
            color: function (params) {
-            return params.data && params.data.status === 1 ? "#52c41a" : "#fa8c16";
+            return params.data && params.data.stationType === '光伏' ? "#52c41a" : "#fa8c16";
           },
         },
         label: {
@@ -466,7 +497,7 @@ function renderRegionGroupMap() {
             return params.name;
           },
         },
-        data: props.scatterData,
+        data: transformStationsToScatter(props.scatterData),
         shading: "lambert",
       },
     ],
@@ -553,7 +584,7 @@ function renderRegionGroupDrillDown(regionGroup) {
 
   // 从 chinaJson 中筛选该大区的省份边界（不加载市级地图）
   const provinceFeatures = chinaJson.features.filter(function (f) {
-    return regionGroup.provinces.includes(f.properties.name);
+    return regionGroup.provinceList.includes(f.properties.name);
   });
 
   if (provinceFeatures.length === 0) {
@@ -571,8 +602,8 @@ function renderRegionGroupDrillDown(regionGroup) {
 
   // 从 props.scatterData 中筛选属于该大区省份的散点数据
   const regionScatterData = props.scatterData.filter(function (point) {
-    return regionGroup.provinces.some(function (province) {
-      return point.region === province;
+    return regionGroup.provinceList.some(function (province) {
+      return point.province === province;
     });
   });
 
@@ -596,15 +627,18 @@ function renderRegionGroupDrillDown(regionGroup) {
       formatter: function (params) {
         if (params.seriesType === 'scatter3D') {
           const data = params.data;
-          let html = '<div style="color: #fff; font-size: 14px; font-weight: bold; margin-bottom: 10px;">' + (data.name || params.name) + '</div>';
-          if (data.totalScale !== undefined) {
-            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">总规模：<span style="color: #00ffcc;">' + data.totalScale + '</span></div>';
+          let html = '<div style="color: #fff; font-size: 14px; font-weight: bold; margin-bottom: 10px;">' + (data.stationName || params.name) + '</div>';
+          if (data.stationType !== undefined) {
+            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">类型：<span style="color: #00ffcc;">' + data.stationType + '</span></div>';
           }
-          if (data.dailyGeneration !== undefined) {
-            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">当日发电量：<span style="color: #00ffcc;">' + data.dailyGeneration + '</span></div>';
+          if (data.capacity !== undefined) {
+            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">发电规模：<span style="color: #00ffcc;">' + data.capacity + ' kW</span></div>';
           }
-          if (data.equivalentHours !== undefined) {
-            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">等效利用小时：<span style="color: #00ffcc;">' + data.equivalentHours + '</span></div>';
+          if (data.hour !== undefined) {
+            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">发电小时：<span style="color: #00ffcc;">' + data.hour + ' h</span></div>';
+          }
+          if (data.num !== undefined) {
+            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">数量：<span style="color: #00ffcc;">' + data.num + '</span></div>';
           }
           return html;
         }
@@ -653,7 +687,7 @@ function renderRegionGroupDrillDown(regionGroup) {
           borderColor: "#fff",
           borderWidth: 1,
           color: function (params) {
-            return params.data && params.data.status === 1 ? "#52c41a" : "#fa8c16";
+            return params.data && params.data.stationType === '光伏' ? "#52c41a" : "#fa8c16";
           },
         },
         emphasis: {
@@ -673,7 +707,7 @@ function renderRegionGroupDrillDown(regionGroup) {
             return params.name;
           },
         },
-        data: regionScatterData,
+        data: transformStationsToScatter(regionScatterData),
         shading: "lambert",
       },
     ],
@@ -685,7 +719,7 @@ function renderRegionGroupDrillDown(regionGroup) {
   // 触发 region-change 事件，通知父组件进入大区省份地图
   emit("region-change", {
     level: "region",
-    name: regionGroup.name,
+    name: regionGroup.nameType,
     stack: [],
   });
 
@@ -746,6 +780,9 @@ function setupRegionGroupDrillDownEvents(regionGeoJson) {
 async function renderRegionMap(adcode, name) {
   showRegionButton.value = false;
 
+  // 隐藏中国地图容器
+  mapContainer.value.style.display = 'none';
+
   // 显示省份地图容器
   regionMapContainer.value.classList.add('active');
 
@@ -779,15 +816,18 @@ async function renderRegionMap(adcode, name) {
       formatter: function (params) {
         if (params.seriesType === 'scatter3D') {
           const data = params.data;
-          let html = '<div style="color: #fff; font-size: 14px; font-weight: bold; margin-bottom: 10px;">' + (data.name || params.name) + '</div>';
-          if (data.totalScale !== undefined) {
-            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">总规模：<span style="color: #00ffcc;">' + data.totalScale + '</span></div>';
+          let html = '<div style="color: #fff; font-size: 14px; font-weight: bold; margin-bottom: 10px;">' + (data.stationName || params.name) + '</div>';
+          if (data.stationType !== undefined) {
+            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">类型：<span style="color: #00ffcc;">' + data.stationType + '</span></div>';
           }
-          if (data.dailyGeneration !== undefined) {
-            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">当日发电量：<span style="color: #00ffcc;">' + data.dailyGeneration + '</span></div>';
+          if (data.capacity !== undefined) {
+            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">发电规模：<span style="color: #00ffcc;">' + data.capacity + ' kW</span></div>';
           }
-          if (data.equivalentHours !== undefined) {
-            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">等效利用小时：<span style="color: #00ffcc;">' + data.equivalentHours + '</span></div>';
+          if (data.hour !== undefined) {
+            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">发电小时：<span style="color: #00ffcc;">' + data.hour + ' h</span></div>';
+          }
+          if (data.num !== undefined) {
+            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">数量：<span style="color: #00ffcc;">' + data.num + '</span></div>';
           }
           return html;
         }
@@ -835,7 +875,7 @@ async function renderRegionMap(adcode, name) {
         silent: false,
         itemStyle: {
           color: function (params) {
-            return params.data && params.data.status === 1 ? "#52c41a" : "#fa8c16";
+            return params.data && params.data.stationType === '光伏' ? "#52c41a" : "#fa8c16";
           },
            borderColor: "#fff",
           borderWidth: 1,
@@ -850,7 +890,7 @@ async function renderRegionMap(adcode, name) {
             return params.name;
           },
         },
-        data: regionScatterData,
+        data: transformStationsToScatter(regionScatterData),
         shading: "lambert",
       },
     ],
@@ -947,7 +987,7 @@ function initMap() {
         // 如果展示业务大区分布，且鼠标悬停在某个省份，整个大区的省份都变高
         if (showRegionColors.value && hoveredRegion) {
           const currentProvinceRegion = getProvinceRegion(f.properties.name);
-          if (currentProvinceRegion && currentProvinceRegion.name === hoveredRegion.name) {
+          if (currentProvinceRegion && currentProvinceRegion.nameType === hoveredRegion.nameType) {
             height = 4;
           }
         } else {
@@ -1066,6 +1106,13 @@ function initMap() {
     }
   });
 
+  // 监听地图缩放，同步背景图
+  chartInstance.on('georoam', function (params) {
+    if (params.zoom) {
+      bgScale.value = Math.max(1, bgScale.value * params.zoom);
+    }
+  });
+
   renderChinaMap();
   window.addEventListener("resize", handleResize);
 }
@@ -1158,10 +1205,9 @@ function showRegionDistribution() {
   // 更新大区颜色状态
   if (props.scatterData.length > 0) {
     const updatedGroups = props.regionGroups.map(function (group) {
-      const hasData = group.provinces.some(function (province) {
+      const hasData = group.provinceList.some(function (province) {
         return props.scatterData.some(function (point) {
-          const dataProvince = getProvinceFromCity(point.name);
-          return dataProvince === province;
+          return point.province === province;
         });
       });
       return {
@@ -1197,28 +1243,12 @@ function showRegionDistribution() {
 function getProvinceRegion(provinceName) {
   for (let i = 0; i < props.regionGroups.length; i++) {
     const group = props.regionGroups[i];
-    if (group.provinces.includes(provinceName)) {
+    if (group.provinceList.includes(provinceName)) {
       return group;
     }
   }
   return null;
 }
-
-// 根据城市名获取省份
-function getProvinceFromCity(cityName) {
-  const provinceMap = {
-    "广州": "广东省", "深圳": "广东省", "东莞": "广东省", "佛山": "广东省",
-    "上海": "上海市", "南京": "江苏省", "杭州": "浙江省", "苏州": "江苏省",
-    "北京": "北京市", "天津": "天津市", "石家庄": "河北省", "太原": "山西省",
-    "西安": "陕西省", "兰州": "甘肃省", "西宁": "青海省",
-    "成都": "四川省", "重庆": "重庆市", "贵阳": "贵州省", "昆明": "云南省",
-    "武汉": "湖北省", "长沙": "湖南省", "郑州": "河南省", "合肥": "安徽省",
-    "哈尔滨": "黑龙江省", "长春": "吉林省", "沈阳": "辽宁省",
-    "乌鲁木齐": "新疆维吾尔自治区", "拉萨": "西藏自治区", "呼和浩特": "内蒙古自治区"
-  };
-  return provinceMap[cityName] || "";
-}
-
 
 // 计算 GeoJSON 特征的中心点
 function getFeatureCenter(feature) {
@@ -1257,7 +1287,7 @@ function getFeatureCenter(feature) {
   return [(minLng + maxLng) / 2, (minLat + maxLat) / 2];
 }
 
-// 从 GeoJSON 生成随机散点数据
+// 从 GeoJSON 生成随机散点数据（新 station 格式）
 function generateRandomScatterData(geoJson, count) {
   if (!geoJson || !geoJson.features || geoJson.features.length === 0) {
     return [];
@@ -1275,14 +1305,14 @@ function generateRandomScatterData(geoJson, count) {
     const center = getFeatureCenter(feature);
 
     return {
-      name: feature.properties.name,
-      value: center
-        ? [center[0], center[1], Math.floor(Math.random() * 200)]
-        : [0, 0, 0],
-      status: Math.random() > 0.5 ? 1 : 0,
-      totalScale: Math.floor(Math.random() * 500) + ' kW',
-      dailyGeneration: Math.floor(Math.random() * 100) + ' kWh',
-      equivalentHours: Math.floor(Math.random() * 10) + ' h'
+      stationType: Math.random() > 0.5 ? '光伏' : '发电',
+      stationName: feature.properties.name + '电站',
+      province: geoJson.features.length > 1 ? feature.properties.name : '',
+      latitude: center ? center[1] : 0,
+      longitude: center ? center[0] : 0,
+      hour: (Math.random() * 8 + 2).toFixed(1),
+      capacity: Math.floor(Math.random() * 500) + 100,
+      num: Math.floor(Math.random() * 5) + 1,
     };
   });
 }
@@ -1447,110 +1477,60 @@ onBeforeUnmount(function () {
 
 
 <template>
-  <div class="map-container" ref="mapContainer"></div>
-  <div class="region-group-container" ref="regionGroupContainer" :style="{ display: showRegions ? 'block' : 'none' }">
+  <div class="mapBox" ref="mapBoxRef" :style="{
+    backgroundImage: 'url(' + mapBg + ')',
+    backgroundSize: (100 * bgScale) + '% ' + (100 * bgScale) + '%',
+    backgroundPosition: 'center',
+  }">
+    <div class="map-container" ref="mapContainer"></div>
+    <div class="region-group-container" ref="regionGroupContainer" :style="{ display: showRegions ? 'block' : 'none' }">
+    </div>
+    <div class="region-map-container" ref="regionMapContainer"></div>
   </div>
-  <div class="region-map-container" ref="regionMapContainer"></div>
 </template>
 
 
 <style scoped>
+.mapBox {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
 .map-container {
   width: 100%;
-  height: 100vh;
+  height: 100%;
   overflow: hidden;
   position: relative;
+  background: transparent;
 }
 
 .region-group-container {
   width: 100%;
-  height: 100vh;
+  height: 100%;
   overflow: hidden;
   position: absolute;
   top: 0;
   left: 0;
   z-index: 5;
-  display: none;
+  background: transparent;
 }
 
 .region-map-container {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
   position: absolute;
   top: 0;
   left: 0;
-  width: 100%;
-  height: 100%;
   z-index: 10;
   display: none;
+  background: transparent;
 }
 
 .region-map-container.active {
   display: block;
 }
 
-.control-panel {
-  position: fixed;
-  bottom: 100px;
-  left: 20px;
-  z-index: 100;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.region-btn {
-  padding: 10px 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-}
-
-.region-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.5);
-}
-
-.region-btn.active {
-  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a5a 100%);
-}
-.legend {
-  margin-top: 10px;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(10px);
-  padding: 12px;
-  border-radius: 8px;
-  position: fixed;
-  bottom: 100px;
-  right: 20px;
-}
-
-.legend-item {
-  display: flex;
-  align-items: center;
-  margin-bottom: 8px;
-  color: #fff;
-  font-size: 13px;
-  cursor: pointer;
-}
-
-.legend-item:last-child {
-  margin-bottom: 0;
-}
-
-.legend-color {
-  width: 16px;
-  height: 16px;
-  border-radius: 4px;
-  margin-right: 8px;
-  flex-shrink: 0;
-}
-
-.legend-text {
-  white-space: nowrap;
-}
 </style>
