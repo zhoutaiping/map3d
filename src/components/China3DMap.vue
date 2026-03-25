@@ -245,7 +245,7 @@ function renderChinaMap(resetRegionState = false) {
       backgroundColor: 'transparent',
       borderColor: 'transparent',
       borderWidth: 0,
-      extraCssText: 'background: url(' + tooltipBg + ') no-repeat center center; background-size: 100% 100%; padding: 15px 20px; box-shadow: none;',
+      extraCssText: 'background: url(' + tooltipBg + ') no-repeat center center; background-size: 100% 100%; padding: 15px 20px; box-shadow: none; min-width:200px;',
       formatter: function (params) {
         const region = getProvinceRegion(params.name);
         if (region && region.list) {
@@ -263,9 +263,9 @@ function renderChinaMap(resetRegionState = false) {
       borderColor: 'transparent',
       borderWidth: 0,
       position: function (point) {
-        return [point[0]-80, point[1] - 150];
+        return [point[0]-80, point[1] - 160];
       },
-      extraCssText: 'background: url(' + tooltipBg + ') no-repeat center center; background-size: 100% 100%; padding: 15px 20px; box-shadow: none;',
+      extraCssText: 'background: url(' + tooltipBg + ') no-repeat center center; background-size: 100% 100%; padding: 15px 20px; box-shadow: none;min-width:200px;',
       formatter: function (params) {
         if (params.seriesType === 'scatter3D') {
           const data = params.data;
@@ -408,7 +408,7 @@ function renderRegionGroupMap() {
       backgroundColor: 'transparent',
       borderColor: 'transparent',
       borderWidth: 0,
-      extraCssText: 'background: url(' + tooltipBg + ') no-repeat center center; background-size: 100% 100%; padding: 15px 20px; box-shadow: none;',
+      extraCssText: 'background: url(' + tooltipBg + ') no-repeat center center; background-size: 100% 100%; padding: 15px 20px; box-shadow: none; min-width:200px;',
       formatter: function (params) {
         if (params.seriesType === 'scatter3D') {
           const data = params.data;
@@ -438,7 +438,7 @@ function renderRegionGroupMap() {
         return '<div style="color: #fff;">' + params.name + '</div>';
       },
       position: function (point) {
-        return [point[0]-80, point[1] - 150];
+        return [point[0]-80, point[1] - 160];
       },
     },
     geo3D: {
@@ -461,7 +461,7 @@ function renderRegionGroupMap() {
       {
         type: "map3D",
         map: "china-region-group",
-        roam: false,
+        roam: true,
         viewControl: DEFAULT_VIEW_CONTROL,
         itemStyle: ITEM_STYLE_CHINA,
         data: provinceData,
@@ -623,7 +623,7 @@ function renderRegionGroupDrillDown(regionGroup) {
       backgroundColor: 'transparent',
       borderColor: 'transparent',
       borderWidth: 0,
-      extraCssText: 'background: url(' + tooltipBg + ') no-repeat center center; background-size: 100% 100%; padding: 15px 20px; box-shadow: none;',
+      extraCssText: 'background: url(' + tooltipBg + ') no-repeat center center; background-size: 100% 100%; padding: 15px 20px; box-shadow: none; min-width:200px;',
       formatter: function (params) {
         if (params.seriesType === 'scatter3D') {
           const data = params.data;
@@ -645,7 +645,7 @@ function renderRegionGroupDrillDown(regionGroup) {
         return '';
       },
       position: function (point) {
-        return [point[0]-80, point[1] - 150];
+        return [point[0]-80, point[1] - 160];
       },
     },
     geo3D: {
@@ -812,7 +812,7 @@ async function renderRegionMap(adcode, name) {
       backgroundColor: 'transparent',
       borderColor: 'transparent',
       borderWidth: 0,
-      extraCssText: 'background: url(' + tooltipBg + ') no-repeat center center; background-size: 100% 100%; padding: 15px 20px; box-shadow: none;',
+      extraCssText: 'background: url(' + tooltipBg + ') no-repeat center center; background-size: 100% 100%; padding: 15px 20px; box-shadow: none; min-width:200px;',
       formatter: function (params) {
         if (params.seriesType === 'scatter3D') {
           const data = params.data;
@@ -834,7 +834,7 @@ async function renderRegionMap(adcode, name) {
         return '';
       },
       position: function (point) {
-        return [point[0]-80, point[1] - 150];
+        return [point[0]-80, point[1] - 160];
       },
     },
     geo3D: {
