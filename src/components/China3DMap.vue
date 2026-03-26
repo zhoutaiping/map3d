@@ -491,6 +491,11 @@ function renderRegionGroupMap() {
     };
   });
 
+  // 聚合所有大区的 stations 作为散点数据
+  const regionGroupsScatterData = regionGroups.value.reduce(function (acc, group) {
+    return acc.concat(Array.isArray(group.stations) ? group.stations : []);
+  }, []);
+
   const option = {
     ...createBaseOption(),
     tooltip: createRegionGroupTooltipConfig(),
@@ -526,7 +531,7 @@ function renderRegionGroupMap() {
         },
         emphasis: EMPHASIS_STYLE_CHINA,
       },
-      createScatterSeries(scatterData.value),
+      createScatterSeries(regionGroupsScatterData),
     ],
   };
 
