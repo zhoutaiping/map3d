@@ -33,7 +33,6 @@
         ref="mapRef"
         v-model:scatterData="chinaCityData"
         v-model:regionGroups="regionGroups"
-        :class="{ animate__animated: animating, animate__zoomIn: animating }"
         @region-change="handleRegionChange"
         @view-state-change="handleViewStateChange"
         @animationend="handleAnimationEnd"
