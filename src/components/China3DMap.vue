@@ -41,7 +41,7 @@ const DEFAULT_VIEW_CONTROL = {
 };
 
 const REGION_VIEW_CONTROL = {
-  distance: 140,
+  distance: 180,
   alpha: 60,
 };
 
@@ -193,8 +193,22 @@ function createScatterTooltipConfig() {
     borderWidth: 0,
     extraCssText: TOOLTIP_SCATTER_CSS,
     formatter: createScatterTooltipFormatter(),
-    position: function (point) {
-      return [point[0] - 100, point[1] - 180];
+    position: function (point, params, dom, rect, size) {
+      var x = point[0];
+      var y = point[1];
+      var boxW = size.contentSize[0];
+      var boxH = size.contentSize[1];
+      var viewW = size.viewSize[0];
+      var viewH = size.viewSize[1];
+      // 水平居中于鼠标正上方
+      var left = x - boxW / 2;
+      var top = y - boxH - 15;
+      // 超出左/右边界时贴边
+      if (left < 0) left = 5;
+      if (left + boxW > viewW) left = viewW - boxW - 5;
+      // 超出上边界时显示在下方
+      if (top < 0) top = y + 15;
+      return [left, top];
     },
   };
 }
@@ -208,8 +222,19 @@ function createRegionGroupTooltipConfig() {
     borderWidth: 0,
     extraCssText: TOOLTIP_SCATTER_CSS,
     formatter: createRegionTooltipFormatter(),
-    position: function (point) {
-      return [point[0] - 100, point[1] - 180];
+    position: function (point, params, dom, rect, size) {
+      var x = point[0];
+      var y = point[1];
+      var boxW = size.contentSize[0];
+      var boxH = size.contentSize[1];
+      var viewW = size.viewSize[0];
+      var viewH = size.viewSize[1];
+      var left = x - boxW / 2;
+      var top = y - boxH - 15;
+      if (left < 0) left = 5;
+      if (left + boxW > viewW) left = viewW - boxW - 5;
+      if (top < 0) top = y + 15;
+      return [left, top];
     },
   };
 }
@@ -223,8 +248,9 @@ function createScatterSeries(scatterData, extra) {
     zlevel: 99,
     geo3DIndex: 0,
     silent: false,
+    blendMode: "source-over",
     itemStyle: {
-      opacity: 0.8,
+      opacity: 0.9,
       borderColor: "#fff",
       borderWidth: 1,
       color: function (params) {
@@ -238,6 +264,16 @@ function createScatterSeries(scatterData, extra) {
       textShadowBlur: 3,
       formatter: function (params) {
         return params.name;
+      },
+    },
+    emphasis: {
+      itemStyle: {
+        opacity: 1,
+        borderColor: "#fff",
+        borderWidth: 3,
+        color: function (params) {
+          return params.data && params.data.stationType === '光伏' ? "#73d13d" : "#ffa940";
+        },
       },
     },
     data: transformStationsToScatter(scatterData),
@@ -621,9 +657,9 @@ function renderRegionGroupDrillDown(regionGroup) {
   // 根据省份数量动态调整视距：省份越多面积越大，distance 相应增大
   const provinceCount = provinceFeatures.length;
   const dynamicDistance = provinceCount >= 12 ? 220
-    : provinceCount >= 8 ? 190
-    : provinceCount >= 5 ? 165
-    : 140;
+    : provinceCount >= 8 ? 160
+    : provinceCount >= 5 ? 160
+    : 160;
   const drillDownViewControl = { ...REGION_VIEW_CONTROL, distance: dynamicDistance };
 
   const option = {
@@ -760,6 +796,7 @@ async function renderRegionMap(adcode, name) {
         type: "map3D",
         map: name,
         roam: true,
+        tooltip: { show: false },
         viewControl: REGION_VIEW_CONTROL,
         itemStyle: ITEM_STYLE_REGION,
         data: regionData.features.map(function (f) {
