@@ -4,23 +4,14 @@ import * as echarts from "echarts";
 import "echarts-gl";
 import chinaJson from "../../public/maps/china.json";
 import tooltipBg from "../assets/toolbg.png";
-import stationIcon from "../assets/statation.png";
 
-import mapBgDefault from "../assets/mapBgDefault.jpeg";
-import mapBgChinaActive from "../assets/mapBgChina.jpg";
-import mapBgRegion from "../assets/mapBgRegion.png";
+import mapBgDefault from "@/assets/mapBgDefault.jpeg";
+import mapBgChinaActive from "@/assets/mapBgChina.jpg";
+import mapBgRegion from "@/assets/mapBgRegion.png";
 
-const emit = defineEmits(["region-change", "view-state-change", "update:regionGroups"]);
-const props = defineProps({
-  scatterData: {
-    type: Array,
-    default: () => [],
-  },
-  regionGroups: {
-    type: Array,
-    default: () => [],
-  },
-});
+const emit = defineEmits(["region-change", "view-state-change"]);
+const scatterData = defineModel("scatterData", { type: Array, default: () => [] });
+const regionGroups = defineModel("regionGroups", { type: Array, default: () => [] });
 
 // 大区显示状态
 const showRegions = ref(false);
@@ -148,6 +139,144 @@ const LABEL_CONFIG_REGION = {
   fontSize: 13,
 };
 
+// ==================== 公共配置工厂 ====================
+
+// 散点 tooltip 公共 CSS
+const TOOLTIP_SCATTER_CSS = 'background: url(' + tooltipBg + ') no-repeat center center; background-size: 100% 100%; padding: 15px 20px; box-shadow: none; min-width:200px;';
+
+// 散点 tooltip formatter（电站详情）
+function createScatterTooltipFormatter() {
+  return function (params) {
+    if (params.seriesType !== 'scatter3D') return '';
+    var data = params.data;
+    var html = '<div style="color: #fff; font-size: 14px; font-weight: bold; margin-bottom: 10px;">' + (data.stationName || params.name) + '</div>';
+    if (data.stationType !== undefined) {
+      html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">类型：<span style="color: #00ffcc;">' + data.stationType + '</span></div>';
+    }
+    if (data.capacity !== undefined) {
+      html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">发电规模：<span style="color: #00ffcc;">' + data.capacity + ' kW</span></div>';
+    }
+    if (data.hour !== undefined) {
+      html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">发电小时：<span style="color: #00ffcc;">' + data.hour + ' h</span></div>';
+    }
+    if (data.num !== undefined) {
+      html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">数量：<span style="color: #00ffcc;">' + data.num + '</span></div>';
+    }
+    return html;
+  };
+}
+
+// 大区 tooltip formatter（省份 → 大区信息）
+function createRegionTooltipFormatter() {
+  return function (params) {
+    if (params.seriesType === 'scatter3D') {
+      return createScatterTooltipFormatter()(params);
+    }
+    var region = getProvinceRegion(params.name);
+    if (region && region.list) {
+      var html = '<div style="color: #fff; font-size: 14px; font-weight: bold; margin-bottom: 10px;">' + region.nameType + '</div>';
+      region.list.forEach(function (item) {
+        html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">' + item.name + '：<span style="color: #00ffcc;">' + item.value + '</span></div>';
+      });
+      return html;
+    }
+    return '<div style="color: #fff;">' + params.name + '</div>';
+  };
+}
+
+// 散点 tooltip 基础配置（含 position 偏移）
+function createScatterTooltipConfig() {
+  return {
+    show: true,
+    backgroundColor: 'transparent',
+    borderColor: 'transparent',
+    borderWidth: 0,
+    extraCssText: TOOLTIP_SCATTER_CSS,
+    formatter: createScatterTooltipFormatter(),
+    position: function (point) {
+      return [point[0] - 100, point[1] - 180];
+    },
+  };
+}
+
+// 大区地图 tooltip 配置（含散点 + 区域两种 formatter）
+function createRegionGroupTooltipConfig() {
+  return {
+    show: true,
+    backgroundColor: 'transparent',
+    borderColor: 'transparent',
+    borderWidth: 0,
+    extraCssText: TOOLTIP_SCATTER_CSS,
+    formatter: createRegionTooltipFormatter(),
+    position: function (point) {
+      return [point[0] - 100, point[1] - 180];
+    },
+  };
+}
+
+// scatter3D series 工厂函数
+function createScatterSeries(scatterData, extra) {
+  return Object.assign({
+    type: "scatter3D",
+    coordinateSystem: "geo3D",
+    symbolSize: 15,
+    zlevel: 99,
+    geo3DIndex: 0,
+    silent: false,
+    itemStyle: {
+      opacity: 0.8,
+      borderColor: "#fff",
+      borderWidth: 1,
+      color: function (params) {
+        return params.data && params.data.stationType === '光伏' ? "#52c41a" : "#fa8c16";
+      },
+    },
+    label: {
+      show: false,
+      color: "#fff",
+      textShadowColor: "#000",
+      textShadowBlur: 3,
+      formatter: function (params) {
+        return params.name;
+      },
+    },
+    data: transformStationsToScatter(scatterData),
+    shading: "lambert",
+  }, extra || {});
+}
+
+// 高亮事件处理器工厂
+function createHighlightHandlers(features, mapInstance, options) {
+  var seriesIndex = options && options.seriesIndex !== undefined ? options.seriesIndex : 0;
+  var getItemStyle = options && options.getItemStyle ? options.getItemStyle : null;
+  var defaultHeight = (options && options.defaultHeight) || 3;
+  var highlightHeight = (options && options.highlightHeight) || 4;
+
+  function buildData(highlightName) {
+    return features.map(function (f) {
+      return {
+        name: f.properties.name,
+        value: 1,
+        height: highlightName ? (f.properties.name === highlightName ? highlightHeight : defaultHeight) : defaultHeight,
+        itemStyle: getItemStyle ? getItemStyle(f) : undefined,
+      };
+    });
+  }
+
+  return {
+    onmouseover: function (params) {
+      if (!params.name) return;
+      mapInstance.setOption({ seriesIndex: seriesIndex, series: [{ data: buildData(params.name) }] });
+      highlightedRegion = params.name;
+    },
+    onmouseout: function () {
+      if (!highlightedRegion) return;
+      mapInstance.setOption({ seriesIndex: seriesIndex, series: [{ data: buildData(null) }] });
+      highlightedRegion = null;
+    },
+  };
+}
+
 // 将新 station 格式转为 ECharts scatter3D 所需格式
 function transformStationsToScatter(stations) {
   if (!stations || !Array.isArray(stations)) return [];
@@ -254,48 +383,22 @@ function renderChinaMap(resetRegionState = false) {
       backgroundColor: 'transparent',
       borderColor: 'transparent',
       borderWidth: 0,
-      extraCssText: 'background: url(' + tooltipBg + ') no-repeat center center; background-size: 100% 100%; padding: 15px 20px; box-shadow: none; min-width:200px;',
+      extraCssText: TOOLTIP_SCATTER_CSS,
       formatter: function (params) {
-        const region = getProvinceRegion(params.name);
+        if (params.seriesType === 'scatter3D') {
+          return createScatterTooltipFormatter()(params);
+        }
+        var region = getProvinceRegion(params.name);
         if (region && region.list) {
-          let html = '<div style="color: #fff; font-size: 14px; font-weight: bold; margin-bottom: 10px;">' + region.nameType + '</div>';
-          region.list.forEach(function(item) {
+          var html = '<div style="color: #fff; font-size: 14px; font-weight: bold; margin-bottom: 10px;">' + region.nameType + '</div>';
+          region.list.forEach(function (item) {
             html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">' + item.name + '：<span style="color: #00ffcc;">' + item.value + '</span></div>';
           });
           return html;
         }
         return '<div style="color: #fff;">' + params.name + '</div>';
       },
-    } : {
-      show: true,
-      backgroundColor: 'transparent',
-      borderColor: 'transparent',
-      borderWidth: 0,
-      position: function (point) {
-        return [point[0]-100, point[1] - 180];
-      },
-      extraCssText: 'background: url(' + tooltipBg + ') no-repeat center center; background-size: 100% 100%; padding: 15px 20px; box-shadow: none;min-width:200px;',
-      formatter: function (params) {
-        if (params.seriesType === 'scatter3D') {
-          const data = params.data;
-          let html = '<div style="color: #fff; font-size: 14px; font-weight: bold; margin-bottom: 10px;">' + (data.stationName || params.name) + '</div>';
-          if (data.stationType !== undefined) {
-            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">类型：<span style="color: #00ffcc;">' + data.stationType + '</span></div>';
-          }
-          if (data.capacity !== undefined) {
-            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">发电规模：<span style="color: #00ffcc;">' + data.capacity + ' kW</span></div>';
-          }
-          if (data.hour !== undefined) {
-            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">发电小时：<span style="color: #00ffcc;">' + data.hour + ' h</span></div>';
-          }
-          if (data.num !== undefined) {
-            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">数量：<span style="color: #00ffcc;">' + data.num + '</span></div>';
-          }
-          return html;
-        }
-        return '';
-      },
-    },
+    } : createScatterTooltipConfig(),
     geo3D: {
       show: false,
       map: 'china',
@@ -320,7 +423,7 @@ function renderChinaMap(resetRegionState = false) {
         viewControl: DEFAULT_VIEW_CONTROL,
         itemStyle: ITEM_STYLE_CHINA,
         data: showRegions.value ? chinaJson.features.map(function (f) {
-          const region = getProvinceRegion(f.properties.name);
+          var region = getProvinceRegion(f.properties.name);
           return {
             name: f.properties.name,
             value: 1,
@@ -331,7 +434,6 @@ function renderChinaMap(resetRegionState = false) {
             }
           };
         }) : undefined,
-
         label: {
           ...LABEL_CONFIG_CHINA,
           formatter: function (params) {
@@ -340,33 +442,7 @@ function renderChinaMap(resetRegionState = false) {
         },
         emphasis: EMPHASIS_STYLE_CHINA,
       },
-      {
-        type: "scatter3D",
-        coordinateSystem: "geo3D",
-        symbolSize: 15,
-        zlevel: 99,
-        geo3DIndex: 0,
-        silent: false,
-        itemStyle: {
-          opacity: 0.8,
-          color: function (params) {
-            return params.data && params.data.stationType === '光伏' ? "#52c41a" : "#fa8c16";
-          },
-          borderColor: "#fff",
-          borderWidth: 1,
-        },
-        label: {
-          show: false,
-          color: "#fff",
-          textShadowColor: "#000",
-          textShadowBlur: 3,
-          formatter: function (params) {
-            return params.name;
-          },
-        },
-        data: transformStationsToScatter(props.scatterData),
-        shading: "lambert",
-      },
+      createScatterSeries(scatterData.value),
     ],
   };
 
@@ -387,6 +463,10 @@ function renderRegionGroupMap() {
   regionGroupLevel.value = 'china';
   currentRegionGroup.value = null;
   currentBgImage.value = mapBgDefault;
+
+  // 回到大区全国地图时恢复图例
+  showLegend.value = true;
+  emitViewStateChange();
 
   // 触发 region-change 事件，通知父组件进入大区全国地图
   emit("region-change", {
@@ -413,44 +493,7 @@ function renderRegionGroupMap() {
 
   const option = {
     ...createBaseOption(),
-    tooltip: {
-      show: true,
-      backgroundColor: 'transparent',
-      borderColor: 'transparent',
-      borderWidth: 0,
-      extraCssText: 'background: url(' + tooltipBg + ') no-repeat center center; background-size: 100% 100%; padding: 15px 20px; box-shadow: none; min-width:200px;',
-      formatter: function (params) {
-        if (params.seriesType === 'scatter3D') {
-          const data = params.data;
-          let html = '<div style="color: #fff; font-size: 14px; font-weight: bold; margin-bottom: 10px;">' + (data.stationName || params.name) + '</div>';
-          if (data.stationType !== undefined) {
-            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">类型：<span style="color: #00ffcc;">' + data.stationType + '</span></div>';
-          }
-          if (data.capacity !== undefined) {
-            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">发电规模：<span style="color: #00ffcc;">' + data.capacity + ' kW</span></div>';
-          }
-          if (data.hour !== undefined) {
-            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">发电小时：<span style="color: #00ffcc;">' + data.hour + ' h</span></div>';
-          }
-          if (data.num !== undefined) {
-            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">数量：<span style="color: #00ffcc;">' + data.num + '</span></div>';
-          }
-          return html;
-        }
-        const region = getProvinceRegion(params.name);
-        if (region && region.list) {
-          let html = '<div style="color: #fff; font-size: 14px; font-weight: bold; margin-bottom: 10px;">' + region.nameType + '</div>';
-          region.list.forEach(function(item) {
-            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">' + item.name + '：<span style="color: #00ffcc;">' + item.value + '</span></div>';
-          });
-          return html;
-        }
-        return '<div style="color: #fff;">' + params.name + '</div>';
-      },
-      position: function (point) {
-        return [point[0]-100, point[1] - 180];
-      },
-    },
+    tooltip: createRegionGroupTooltipConfig(),
     geo3D: {
       show: false,
       map: 'china-region-group',
@@ -483,33 +526,7 @@ function renderRegionGroupMap() {
         },
         emphasis: EMPHASIS_STYLE_CHINA,
       },
-      {
-        type: "scatter3D",
-        coordinateSystem: "geo3D",
-        // symbol: 'image://' + stationIcon,
-        symbolSize: 15,
-        
-        zlevel: 99,
-        geo3DIndex: 0,
-        silent: false,
-        itemStyle: {
-          opacity: 0.8,
-           color: function (params) {
-            return params.data && params.data.stationType === '光伏' ? "#52c41a" : "#fa8c16";
-          },
-        },
-        label: {
-          show: false,
-          color: "#fff",
-          textShadowColor: "#000",
-          textShadowBlur: 3,
-          formatter: function (params) {
-            return params.name;
-          },
-        },
-        data: transformStationsToScatter(props.scatterData),
-        shading: "lambert",
-      },
+      createScatterSeries(scatterData.value),
     ],
   };
 
@@ -526,53 +543,18 @@ function setupRegionGroupMapEvents() {
   regionGroupChartInstance.off('mouseover');
   regionGroupChartInstance.off('mouseout');
 
-  // 鼠标移入事件
-  regionGroupChartInstance.on("mouseover", function (params) {
-    if (!params.name) return;
-
-    const currentData = chinaJson.features.map(function (f) {
-      const region = getProvinceRegion(f.properties.name);
+  var handlers = createHighlightHandlers(chinaJson.features, regionGroupChartInstance, {
+    getItemStyle: function (f) {
+      var region = getProvinceRegion(f.properties.name);
       return {
-        name: f.properties.name,
-        value: 1,
-        height: f.properties.name === params.name ? 4 : 3,
-        itemStyle: {
-          areaColor: region && region.colorStatus ? region.color : "#1a2b45",
-          color: region && region.colorStatus ? region.color : "#1a2b45",
-        }
+        areaColor: region && region.colorStatus ? region.color : "#1a2b45",
+        color: region && region.colorStatus ? region.color : "#1a2b45",
       };
-    });
-
-    regionGroupChartInstance.setOption({
-      series: [{ data: currentData }]
-    });
-
-    highlightedRegion = params.name;
+    },
   });
 
-  // 鼠标移出事件
-  regionGroupChartInstance.on("mouseout", function () {
-    if (!highlightedRegion) return;
-
-    const currentData = chinaJson.features.map(function (f) {
-      const region = getProvinceRegion(f.properties.name);
-      return {
-        name: f.properties.name,
-        value: 1,
-        height: 3,
-        itemStyle: {
-          areaColor: region && region.colorStatus ? region.color : "#1a2b45",
-          color: region && region.colorStatus ? region.color : "#1a2b45",
-        }
-      };
-    });
-
-    regionGroupChartInstance.setOption({
-      series: [{ data: currentData }]
-    });
-
-    highlightedRegion = null;
-  });
+  regionGroupChartInstance.on("mouseover", handlers.onmouseover);
+  regionGroupChartInstance.on("mouseout", handlers.onmouseout);
 
   // 点击事件 - 下钻到大区
   regionGroupChartInstance.on("click", async function (params) {
@@ -593,6 +575,10 @@ function renderRegionGroupDrillDown(regionGroup) {
   currentRegionGroup.value = regionGroup;
   currentBgImage.value = mapBgRegion;
 
+  // 下钻时隐藏右下角大区图例
+  showLegend.value = false;
+  emitViewStateChange();
+
   // 从 chinaJson 中筛选该大区的省份边界（不加载市级地图）
   const provinceFeatures = chinaJson.features.filter(function (f) {
     return regionGroup.provinceList.includes(f.properties.name);
@@ -611,8 +597,8 @@ function renderRegionGroupDrillDown(regionGroup) {
 
   echarts.registerMap("region-group-drilldown", regionGeoJson);
 
-  // 从 props.scatterData 中筛选属于该大区省份的散点数据
-  const regionScatterData = props.scatterData.filter(function (point) {
+  // 从 scatterData 中筛选属于该大区省份的散点数据
+  const regionScatterData = scatterData.value.filter(function (point) {
     return regionGroup.provinceList.some(function (province) {
       return point.province === province;
     });
@@ -627,45 +613,24 @@ function renderRegionGroupDrillDown(regionGroup) {
     };
   });
 
+  // 根据省份数量动态调整视距：省份越多面积越大，distance 相应增大
+  const provinceCount = provinceFeatures.length;
+  const dynamicDistance = provinceCount >= 12 ? 220
+    : provinceCount >= 8 ? 190
+    : provinceCount >= 5 ? 165
+    : 140;
+  const drillDownViewControl = { ...REGION_VIEW_CONTROL, distance: dynamicDistance };
+
   const option = {
     ...createBaseOption(),
-    tooltip: {
-      show: true,
-      backgroundColor: 'transparent',
-      borderColor: 'transparent',
-      borderWidth: 0,
-      extraCssText: 'background: url(' + tooltipBg + ') no-repeat center center; background-size: 100% 100%; padding: 15px 20px; box-shadow: none; min-width:200px;',
-      formatter: function (params) {
-        if (params.seriesType === 'scatter3D') {
-          const data = params.data;
-          let html = '<div style="color: #fff; font-size: 14px; font-weight: bold; margin-bottom: 10px;">' + (data.stationName || params.name) + '</div>';
-          if (data.stationType !== undefined) {
-            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">类型：<span style="color: #00ffcc;">' + data.stationType + '</span></div>';
-          }
-          if (data.capacity !== undefined) {
-            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">发电规模：<span style="color: #00ffcc;">' + data.capacity + ' kW</span></div>';
-          }
-          if (data.hour !== undefined) {
-            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">发电小时：<span style="color: #00ffcc;">' + data.hour + ' h</span></div>';
-          }
-          if (data.num !== undefined) {
-            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">数量：<span style="color: #00ffcc;">' + data.num + '</span></div>';
-          }
-          return html;
-        }
-        return '';
-      },
-      position: function (point) {
-        return [point[0]-100, point[1] - 180];
-      },
-    },
+    tooltip: createScatterTooltipConfig(),
     geo3D: {
       show: false,
       map: 'region-group-drilldown',
       aspectScale: 0.9,
       zoom: 1,
       selectedMode: false,
-      viewControl: REGION_VIEW_CONTROL,
+      viewControl: drillDownViewControl,
       itemStyle: ITEM_STYLE_REGION,
       label: LABEL_CONFIG_REGION,
       emphasis: EMPHASIS_STYLE_REGION,
@@ -676,7 +641,7 @@ function renderRegionGroupDrillDown(regionGroup) {
         map: "region-group-drilldown",
         roam: true,
         tooltip: { show: false },
-        viewControl: REGION_VIEW_CONTROL,
+        viewControl: drillDownViewControl,
         itemStyle: {
           ...ITEM_STYLE_REGION,
           color: regionGroup.color,
@@ -689,21 +654,7 @@ function renderRegionGroupDrillDown(regionGroup) {
         label: LABEL_CONFIG_REGION,
         emphasis: EMPHASIS_STYLE_REGION,
       },
-      {
-        type: "scatter3D",
-        coordinateSystem: "geo3D",
-        symbolSize: 15,
-        zlevel: 99,
-        geo3DIndex: 0,
-        silent: false,
-        itemStyle: {
-          opacity: 0.8,
-          borderColor: "#fff",
-          borderWidth: 1,
-          color: function (params) {
-            return params.data && params.data.stationType === '光伏' ? "#52c41a" : "#fa8c16";
-          },
-        },
+      createScatterSeries(regionScatterData, {
         emphasis: {
           itemStyle: {
             opacity: 0.8,
@@ -721,9 +672,7 @@ function renderRegionGroupDrillDown(regionGroup) {
             return params.name;
           },
         },
-        data: transformStationsToScatter(regionScatterData),
-        shading: "lambert",
-      },
+      }),
     ],
   };
 
@@ -747,45 +696,12 @@ function setupRegionGroupDrillDownEvents(regionGeoJson) {
   regionGroupChartInstance.off('mouseover');
   regionGroupChartInstance.off('mouseout');
 
-  // 鼠标移入事件
-  regionGroupChartInstance.on("mouseover", function (params) {
-    if (!params.name) return;
-
-    const currentData = regionGeoJson.features.map(function (f) {
-      return {
-        name: f.properties.name,
-        value: 1,
-        height: f.properties.name === params.name ? 4 : 3
-      };
-    });
-
-    regionGroupChartInstance.setOption({
-      seriesIndex: 0,
-      series: [{ data: currentData }]
-    });
-
-    highlightedRegion = params.name;
+  var handlers = createHighlightHandlers(regionGeoJson.features, regionGroupChartInstance, {
+    seriesIndex: 0,
   });
 
-  // 鼠标移出事件
-  regionGroupChartInstance.on("mouseout", function () {
-    if (!highlightedRegion) return;
-
-    const currentData = regionGeoJson.features.map(function (f) {
-      return {
-        name: f.properties.name,
-        value: 1,
-        height: 3
-      };
-    });
-
-    regionGroupChartInstance.setOption({
-      seriesIndex: 0,
-      series: [{ data: currentData }]
-    });
-
-    highlightedRegion = null;
-  });
+  regionGroupChartInstance.on("mouseover", handlers.onmouseover);
+  regionGroupChartInstance.on("mouseout", handlers.onmouseout);
 
   // 点击事件已移除 - 不再支持下钻到单独省份
 }
@@ -822,36 +738,7 @@ async function renderRegionMap(adcode, name) {
 
   const option = {
     ...createBaseOption(),
-    tooltip: {
-      show: true,
-      backgroundColor: 'transparent',
-      borderColor: 'transparent',
-      borderWidth: 0,
-      extraCssText: 'background: url(' + tooltipBg + ') no-repeat center center; background-size: 100% 100%; padding: 15px 20px; box-shadow: none; min-width:200px;',
-      formatter: function (params) {
-        if (params.seriesType === 'scatter3D') {
-          const data = params.data;
-          let html = '<div style="color: #fff; font-size: 14px; font-weight: bold; margin-bottom: 10px;">' + (data.stationName || params.name) + '</div>';
-          if (data.stationType !== undefined) {
-            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">类型：<span style="color: #00ffcc;">' + data.stationType + '</span></div>';
-          }
-          if (data.capacity !== undefined) {
-            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">发电规模：<span style="color: #00ffcc;">' + data.capacity + ' kW</span></div>';
-          }
-          if (data.hour !== undefined) {
-            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">发电小时：<span style="color: #00ffcc;">' + data.hour + ' h</span></div>';
-          }
-          if (data.num !== undefined) {
-            html += '<div style="color: #fff; font-size: 12px; margin: 5px 0;">数量：<span style="color: #00ffcc;">' + data.num + '</span></div>';
-          }
-          return html;
-        }
-        return '';
-      },
-      position: function (point) {
-        return [point[0]-100, point[1] - 180];
-      },
-    },
+    tooltip: createScatterTooltipConfig(),
     geo3D: {
       show: false,
       map: name,
@@ -880,34 +767,7 @@ async function renderRegionMap(adcode, name) {
         label: LABEL_CONFIG_REGION,
         emphasis: EMPHASIS_STYLE_REGION,
       },
-      {
-        type: "scatter3D",
-        coordinateSystem: "geo3D",
-        // symbol: 'image://' + stationIcon,
-        symbolSize: 15,
-        zlevel: 99,
-        geo3DIndex: 0,
-        silent: false,
-        itemStyle: {
-          color: function (params) {
-            return params.data && params.data.stationType === '光伏' ? "#52c41a" : "#fa8c16";
-          },
-           borderColor: "#fff",
-          borderWidth: 1,
-          opacity: 0.8,
-        },
-        label: {
-          show: false,
-          color: "#fff",
-          textShadowColor: "#000",
-          textShadowBlur: 3,
-          formatter: function (params) {
-            return params.name;
-          },
-        },
-        data: transformStationsToScatter(regionScatterData),
-        shading: "lambert",
-      },
+      createScatterSeries(regionScatterData),
     ],
   };
 
@@ -927,53 +787,15 @@ async function renderRegionMap(adcode, name) {
 
 // 为省份地图设置鼠标事件
 function setupRegionMapEvents(regionData) {
-  // 移除之前的事件监听器（如果有）
   regionChartInstance.off('mouseover');
   regionChartInstance.off('mouseout');
 
-  // 鼠标移入事件 - 区域高度变为 4
-  regionChartInstance.on("mouseover", function (params) {
-    if (!params.name) return;
-
-    const currentData = regionData.features.map(function (f) {
-      return {
-        name: f.properties.name,
-        value: 1,
-        height: f.properties.name === params.name ? 4 : 3,
-        itemStyle: ITEM_STYLE_REGION
-      };
-    });
-
-    regionChartInstance.setOption({
-      series: [{
-        data: currentData
-      }]
-    });
-
-    highlightedRegion = params.name;
+  var handlers = createHighlightHandlers(regionData.features, regionChartInstance, {
+    getItemStyle: function () { return ITEM_STYLE_REGION; },
   });
 
-  // 鼠标移出事件 - 区域高度恢复
-  regionChartInstance.on("mouseout", async function () {
-    if (!highlightedRegion) return;
-
-    const currentData = regionData.features.map(function (f) {
-      return {
-        name: f.properties.name,
-        value: 1,
-        height: 3,
-        itemStyle: ITEM_STYLE_REGION
-      };
-    });
-
-    regionChartInstance.setOption({
-      series: [{
-        data: currentData
-      }]
-    });
-
-    highlightedRegion = null;
-  });
+  regionChartInstance.on("mouseover", handlers.onmouseover);
+  regionChartInstance.on("mouseout", handlers.onmouseout);
 }
 
 // 初始化地图
@@ -982,87 +804,59 @@ function initMap() {
 
   chartInstance = echarts.init(mapContainer.value);
 
-  // // 鼠标移入事件 - 区域高度变为 4
-  chartInstance.on("mouseover", async function (params) {
+  // 鼠标移入事件 - 区域高度变为 4（支持大区联动高亮）
+  chartInstance.on("mouseover", function (params) {
     if (!params.name) return;
-    // 记录当前地图类型
-    const isChina = navigationStack.value.length === 0;
+    if (navigationStack.value.length !== 0) return;
 
-    let currentData = [];
+    var hoveredRegion = showRegionColors.value ? getProvinceRegion(params.name) : null;
+    var currentData = chinaJson.features.map(function (f) {
+      var provinceRegion = showRegions.value ? getProvinceRegion(f.properties.name) : null;
+      var height = 3;
 
-    if (isChina) {
-      // 中国地图
-      // 检查是否展示业务大区分布
-      const hoveredRegion = showRegionColors.value ? getProvinceRegion(params.name) : null;
-
-      currentData = chinaJson.features.map(function (f) {
-        const provinceRegion = showRegions.value ? getProvinceRegion(f.properties.name) : null;
-        let height = 3;
-
-        // 如果展示业务大区分布，且鼠标悬停在某个省份，整个大区的省份都变高
-        if (showRegionColors.value && hoveredRegion) {
-          const currentProvinceRegion = getProvinceRegion(f.properties.name);
-          if (currentProvinceRegion && currentProvinceRegion.nameType === hoveredRegion.nameType) {
-            height = 4;
-          }
-        } else {
-          // 普通模式：只有当前悬停的省份变高
-          height = f.properties.name === params.name ? 4 : 3;
+      if (showRegionColors.value && hoveredRegion) {
+        var currentProvinceRegion = getProvinceRegion(f.properties.name);
+        if (currentProvinceRegion && currentProvinceRegion.nameType === hoveredRegion.nameType) {
+          height = 4;
         }
+      } else {
+        height = f.properties.name === params.name ? 4 : 3;
+      }
 
-        return {
-          name: f.properties.name,
-          value: 1,
-          height: height,
-          itemStyle: showRegions.value ? {
-            areaColor: provinceRegion && provinceRegion.colorStatus ? provinceRegion.color : undefined,
-            color: provinceRegion && provinceRegion.colorStatus ? provinceRegion.color : undefined,
-          } : undefined,
-        };
-      });
-
-    }
-
-    chartInstance.setOption({
-      series: [{
-        data: currentData
-      }]
+      return {
+        name: f.properties.name,
+        value: 1,
+        height: height,
+        itemStyle: showRegions.value ? {
+          areaColor: provinceRegion && provinceRegion.colorStatus ? provinceRegion.color : undefined,
+          color: provinceRegion && provinceRegion.colorStatus ? provinceRegion.color : undefined,
+        } : undefined,
+      };
     });
 
+    chartInstance.setOption({ series: [{ data: currentData }] });
     highlightedRegion = params.name;
   });
 
   // 鼠标移出事件 - 区域高度恢复
-  chartInstance.on("mouseout", async function () {
-
+  chartInstance.on("mouseout", function () {
     if (!highlightedRegion) return;
+    if (navigationStack.value.length !== 0) return;
 
-    const isChina = navigationStack.value.length === 0;
-
-    let currentData = [];
-
-    if (isChina) {
-      // 中国地图
-      currentData = chinaJson.features.map(function (f) {
-        const region = showRegions.value ? getProvinceRegion(f.properties.name) : null;
-        return {
-          name: f.properties.name,
-          value: 1,
-          height: 3,
-          itemStyle: showRegions.value ? {
-            areaColor: region && region.colorStatus ? region.color : undefined,
-            color: region && region.colorStatus ? region.color : undefined,
-          } : undefined,
-        };
-      });
-    }
-
-    chartInstance.setOption({
-      series: [{
-        data: currentData
-      }]
+    var currentData = chinaJson.features.map(function (f) {
+      var region = showRegions.value ? getProvinceRegion(f.properties.name) : null;
+      return {
+        name: f.properties.name,
+        value: 1,
+        height: 3,
+        itemStyle: showRegions.value ? {
+          areaColor: region && region.colorStatus ? region.color : undefined,
+          color: region && region.colorStatus ? region.color : undefined,
+        } : undefined,
+      };
     });
 
+    chartInstance.setOption({ series: [{ data: currentData }] });
     highlightedRegion = null;
   });
 
@@ -1188,8 +982,6 @@ function toggleRegionMode() {
     renderChinaMap();
     emitViewStateChange();
   }
-
-  console.log('showLegend.value----', showLegend.value)
 }
 
 // 显示业务大区分布（"业务大区分布"按钮）
@@ -1212,52 +1004,32 @@ function showRegionDistribution() {
   // 切换到大区模式
   if (!showRegions.value) {
     showRegions.value = true;
-  }
-
-  mapContainer.value.style.display = 'none';
-  regionGroupContainer.value.style.display = 'block';
-
-  // 更新大区颜色状态
-  if (props.scatterData.length > 0) {
-    const updatedGroups = props.regionGroups.map(function (group) {
-      const hasData = group.provinceList.some(function (province) {
-        return props.scatterData.some(function (point) {
-          return point.province === province;
-        });
-      });
-      return {
-        ...group,
-        colorStatus: hasData
-      };
-    });
-    emit("update:regionGroups", updatedGroups);
-  } else {
-    const updatedGroups = props.regionGroups.map(function (group) {
-      return {
-        ...group,
-        colorStatus: true
-      };
-    });
-    emit("update:regionGroups", updatedGroups);
-  }
-
-  // 如果不在大区模式，切换容器
-  if (!showRegions.value) {
-    showRegions.value = true;
     mapContainer.value.style.display = 'none';
     regionGroupContainer.value.style.display = 'block';
   }
 
+  // 更新大区颜色状态
+  var updatedGroups = regionGroups.value.map(function (group) {
+    if (scatterData.value.length > 0) {
+      var hasData = group.provinceList.some(function (province) {
+        return scatterData.value.some(function (point) {
+          return point.province === province;
+        });
+      });
+      return Object.assign({}, group, { colorStatus: hasData });
+    }
+    return Object.assign({}, group, { colorStatus: true });
+  });
+  regionGroups.value = updatedGroups;
+
   renderRegionGroupMap();
   emitViewStateChange();
-
-  console.log('showLegend.value----', showLegend.value)
 }
 
 // 获取省份所属大区
 function getProvinceRegion(provinceName) {
-  for (let i = 0; i < props.regionGroups.length; i++) {
-    const group = props.regionGroups[i];
+  for (let i = 0; i < regionGroups.value.length; i++) {
+    const group = regionGroups.value[i];
     if (group.provinceList.includes(provinceName)) {
       return group;
     }
@@ -1332,112 +1104,87 @@ function generateRandomScatterData(geoJson, count) {
   });
 }
 
+// 重置为全国地图（清理所有状态和实例）
+function resetToChinaMap() {
+  showRegions.value = false;
+  showRegionColors.value = false;
+  showLegend.value = false;
+  navigationStack.value = [];
+  showRegionButton.value = true;
+  mapContainer.value.style.display = 'block';
+  regionGroupContainer.value.style.display = 'none';
+  if (regionGroupChartInstance) regionGroupChartInstance.clear();
+  if (regionChartInstance) regionChartInstance.clear();
+  if (regionMapContainer.value) regionMapContainer.value.classList.remove('active');
+  renderChinaMap();
+  if (chartInstance) chartInstance.resize();
+  emitViewStateChange();
+}
+
 // 返回上一级
 function goBack() {
-  // 检查是否在省份详情地图（regionMapContainer）
+  // 检查是否在省份详情地图
   if (regionMapContainer.value && regionMapContainer.value.classList.contains('active')) {
-    // 隐藏省份地图容器
     regionMapContainer.value.classList.remove('active');
+    if (regionChartInstance) regionChartInstance.clear();
 
     // 返回到大区地图
     if (showRegions.value && regionGroupChartInstance) {
-      // 如果当前在大区下钻层级，返回到大区省份地图
       if (regionGroupLevel.value === 'region' && currentRegionGroup.value) {
-        // 已经在大区省份地图，不需要再次渲染
-        return;
-      } else {
-        // 返回到大区全国地图
-        renderRegionGroupMap();
-        return;
+        return; // 已在大区省份地图
       }
+      renderRegionGroupMap();
+      return;
     }
 
-    // 如果不在大区模式，返回到中国地图
-    // 重置状态
-    showRegions.value = false;
-    showRegionColors.value = false;
-    showLegend.value = false;
-    // 确保容器正确显示
-    mapContainer.value.style.display = 'block';
-    regionGroupContainer.value.style.display = 'none';
-    // 清理地图实例
-    if (regionChartInstance) {
-      regionChartInstance.clear();
-    }
-    navigationStack.value = [];
-    showRegionButton.value = true;
-    renderChinaMap();
-    // 确保图表正确渲染
-    if (chartInstance) {
-      chartInstance.resize();
-    }
+    // 返回到中国地图
+    resetToChinaMap();
     return;
   }
 
-  // 检查是否在大区省份地图
+  // 从大区省份地图返回到大区全国地图
   if (showRegions.value && regionGroupLevel.value === 'region') {
-    // 从大区省份地图返回到大区全国地图
     renderRegionGroupMap();
     return;
   }
 
-  // 检查是否在大区全国地图
+  // 从大区全国地图返回到中国地图
   if (showRegions.value && regionGroupLevel.value === 'china') {
-    // 从大区全国地图返回到中国地图
-    showRegions.value = false;
-    mapContainer.value.style.display = 'block';
-    regionGroupContainer.value.style.display = 'none';
-    // 清理大区地图实例
-    if (regionGroupChartInstance) {
-      regionGroupChartInstance.clear();
-    }
-    // 隐藏省份详情地图容器
-    if (regionMapContainer.value) {
-      regionMapContainer.value.classList.remove('active');
-    }
-    // 清空导航栈
-    navigationStack.value = [];
-    renderChinaMap();
+    resetToChinaMap();
     return;
   }
 
-  // 原有的导航栈逻辑
-  if (navigationStack.value.length === 0) {
-    return;
-  }
+  // 导航栈为空，无操作
+  if (navigationStack.value.length === 0) return;
 
   // 移除当前层级
   navigationStack.value.pop();
 
   if (navigationStack.value.length === 0) {
-    // 返回中国地图 - 重置状态并确保容器正确显示
-    showRegions.value = false;
-    showRegionColors.value = false;
-    showLegend.value = false;
-    // 确保容器正确显示
-    mapContainer.value.style.display = 'block';
-    regionGroupContainer.value.style.display = 'none';
-    showRegionButton.value = true;
-    renderChinaMap();
-    // 隐藏省份地图容器
-    regionMapContainer.value.classList.remove('active');
-    // 确保图表正确渲染
-    if (chartInstance) {
-      chartInstance.resize();
-    }
+    resetToChinaMap();
   } else {
     showRegionButton.value = false;
-    // 返回上一级地图
-    const previousLevel =
-      navigationStack.value[navigationStack.value.length - 1];
+    var previousLevel = navigationStack.value[navigationStack.value.length - 1];
     renderRegionMap(previousLevel.adcode, previousLevel.name);
   }
 }
 
 // 监听 regionGroups prop 变化，大区模式下自动重新渲染地图刷新颜色
-watch(() => props.regionGroups, function () {
-  if (!showRegions.value) return;
+// 防抖标记：同一轮 nextTick 中只执行一次渲染
+let renderQueued = false;
+function queueRender(renderFn) {
+  if (renderQueued) return;
+  renderQueued = true;
   nextTick(function () {
+    renderQueued = false;
+    renderFn();
+  });
+}
+
+// 监听 regionGroups prop 变化，数据更新时重新渲染当前大区地图
+watch(regionGroups, function () {
+  if (!showRegions.value) return;
+  queueRender(function () {
     if (regionGroupLevel.value === 'china') {
       renderRegionGroupMap();
     } else if (regionGroupLevel.value === 'region' && currentRegionGroup.value) {
@@ -1447,8 +1194,8 @@ watch(() => props.regionGroups, function () {
 }, { deep: true });
 
 // 监听 scatterData prop 变化，数据更新时重新渲染当前地图
-watch(() => props.scatterData, function () {
-  nextTick(function () {
+watch(scatterData, function () {
+  queueRender(function () {
     if (!showRegions.value) {
       renderChinaMap();
     } else if (regionGroupLevel.value === 'china') {

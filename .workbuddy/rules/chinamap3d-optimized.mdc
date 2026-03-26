@@ -1,0 +1,16 @@
+---
+description: 
+alwaysApply: true
+enabled: true
+updatedAt: 2026-03-25T10:08:57.248Z
+provider: 
+---
+
+# China3DMap.vue 优化
+
+已完成提取公共函数：
+- createScatterTooltipFormatter(stationDetail=true/false)
+- createScatterSeries(scatterData, extra)
+- createHighlightHandler(features, mapInstance, seriesIndex, getItemStyle)
+- switchToContainer(target, clearInstances, resetStates)
+- 已清理 stationIcon import、console.log
