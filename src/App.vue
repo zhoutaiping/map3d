@@ -334,7 +334,7 @@ const INITIAL_REGION = { level: "china", name: "", stack: [] };
 const mapRef = ref(null);
 const currentRegion = ref(INITIAL_REGION);
 const chinaCityData = ref([]);
-const regionGroups = ref(JSON.parse(JSON.stringify(INITIAL_REGION_GROUPS)));
+const regionGroups = ref([]);
 const mapFlag = ref("PROVINCES");
 
 setTimeout(() => {

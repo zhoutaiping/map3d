@@ -738,8 +738,8 @@ async function renderRegionMap(adcode, name) {
 
   echarts.registerMap(name, regionData);
 
-  // 生成省份内的随机散点数据后续改 fetchAPI
-  const regionScatterData = generateRandomScatterData(regionData, 10);
+  // 从 scatterData 中筛选属于该省份的散点数据
+  const regionScatterData = scatterData.value.filter(point => point.province === name);
 
   const option = {
     ...createBaseOption(),
@@ -1079,35 +1079,6 @@ function getFeatureCenter(feature) {
   return [(minLng + maxLng) / 2, (minLat + maxLat) / 2];
 }
 
-// 从 GeoJSON 生成随机散点数据（新 station 格式）
-function generateRandomScatterData(geoJson, count) {
-  if (!geoJson || !geoJson.features || geoJson.features.length === 0) {
-    return [];
-  }
-
-  // 随机打乱特征数组
-  const shuffled = [...geoJson.features].sort(function () {
-    return Math.random() - 0.5;
-  });
-
-  // 取前 count 个
-  const selected = shuffled.slice(0, Math.min(count, shuffled.length));
-
-  return selected.map(function (feature) {
-    const center = getFeatureCenter(feature);
-
-    return {
-      stationType: Math.random() > 0.5 ? '光伏' : '发电',
-      stationName: feature.properties.name + '电站',
-      province: geoJson.features.length > 1 ? feature.properties.name : '',
-      latitude: center ? center[1] : 0,
-      longitude: center ? center[0] : 0,
-      hour: (Math.random() * 8 + 2).toFixed(1),
-      capacity: Math.floor(Math.random() * 500) + 100,
-      num: Math.floor(Math.random() * 5) + 1,
-    };
-  });
-}
 
 // 重置为全国地图（清理所有状态和实例）
 function resetToChinaMap() {
