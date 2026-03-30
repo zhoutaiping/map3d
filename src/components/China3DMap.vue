@@ -47,7 +47,6 @@ const REGION_VIEW_CONTROL = {
 
 const ITEM_STYLE_CHINA = {
   color: "rgb(68, 133, 158)",
-  opacity: 0.8,
   borderWidth: 1,
   borderColor: "#ffffff",
 };
@@ -257,7 +256,6 @@ function createScatterSeries(scatterData, extra) {
     acc[type].push(item);
     return acc;
   }, {});
-  console.log('groups', groups);
 
   var extraObj = extra || {};
 
@@ -419,12 +417,18 @@ function renderChinaMap(resetRegionState = false) {
   }
   showRegionButton.value = true;
 
-  // 清理其他地图实例
+  // 清理其他地图实例并移除事件监听器
   if (regionGroupChartInstance) {
+    regionGroupChartInstance.off('click');
+    regionGroupChartInstance.off('mouseover');
+    regionGroupChartInstance.off('mouseout');
     regionGroupChartInstance.clear();
   }
-  // 清理省份详情地图实例
+  // 清理省份详情地图实例并移除事件监听器
   if (regionChartInstance) {
+    regionChartInstance.off('click');
+    regionChartInstance.off('mouseover');
+    regionChartInstance.off('mouseout');
     regionChartInstance.clear();
   }
   // 隐藏省份详情地图容器
@@ -479,6 +483,8 @@ function renderChinaMap(resetRegionState = false) {
         type: "map3D",
         map: "china",
         roam: false,
+        zlevel: 1,
+        zlevelIndex: 0,
         viewControl: DEFAULT_VIEW_CONTROL,
         itemStyle: ITEM_STYLE_CHINA,
         data: showRegions.value ? chinaJson.features.map(function (f) {
@@ -565,7 +571,7 @@ function renderRegionGroupMap() {
       zoom: 0.5,
       selectedMode: false,
       viewControl: DEFAULT_VIEW_CONTROL,
-      itemStyle: ITEM_STYLE_REGION,
+    //   itemStyle: ITEM_STYLE_REGION,
       label: {
         ...LABEL_CONFIG_CHINA,
         formatter: function (params) {
@@ -573,6 +579,12 @@ function renderRegionGroupMap() {
         },
       },
       emphasis: EMPHASIS_STYLE_CHINA,
+      shading: "realistic",
+        // 真实感材质相关的配置项
+        realisticMaterial: {
+            detailTexture: mapBgChina, // 纹理图片
+            textureTiling: 1,
+        },
     },
     series: [
       {
@@ -622,9 +634,8 @@ function setupRegionGroupMapEvents() {
 
   // 点击事件 - 下钻到大区
   regionGroupChartInstance.on("click", async function (params) {
-    console.log('[散点点击 debug]', params);
-    // 散点点击：优先检查 seriesType，其次检查 stationType 字段
-    if (params.seriesType === 'scatter3D' ) {
+    // 散点点击：检查 seriesType 或 stationType 字段，有则阻止下钻
+    if (params.seriesType === 'scatter3D' || (params.data && params.data.stationType !== undefined)) {
       console.log('[散点点击 debug]', params);
       emit("scatter-click", params.data);
       return;
@@ -686,9 +697,9 @@ function renderRegionGroupDrillDown(regionGroup) {
   // 根据省份数量动态调整视距：省份越多面积越大，distance 相应增大
   const provinceCount = provinceFeatures.length;
   const dynamicDistance = provinceCount >= 12 ? 220
-    : provinceCount >= 8 ? 160
-      : provinceCount >= 5 ? 160
-        : 160;
+    : provinceCount >= 8 ? 180
+      : provinceCount >= 5 ? 180
+        : 180;
   const drillDownViewControl = { ...REGION_VIEW_CONTROL, distance: dynamicDistance };
 
   const option = {
@@ -710,6 +721,8 @@ function renderRegionGroupDrillDown(regionGroup) {
         type: "map3D",
         map: "region-group-drilldown",
         roam: true,
+        zlevel: 1,
+        zlevelIndex: 0,
         tooltip: { show: false },
         viewControl: drillDownViewControl,
         itemStyle: {
@@ -717,9 +730,7 @@ function renderRegionGroupDrillDown(regionGroup) {
           color: regionGroup.color,
           areaColor: regionGroup.color,
         },
-        realisticMaterial: {
-          detailTexture: mapBgChina,
-        },
+       
         data: areaData,
         label: LABEL_CONFIG_REGION,
         emphasis: EMPHASIS_STYLE_REGION,
@@ -833,6 +844,8 @@ async function renderRegionMap(adcode, name) {
         type: "map3D",
         map: name,
         roam: true,
+        zlevel: 1,
+        zlevelIndex: 0,
         tooltip: { show: false },
         viewControl: REGION_VIEW_CONTROL,
         itemStyle: ITEM_STYLE_REGION,
@@ -845,6 +858,13 @@ async function renderRegionMap(adcode, name) {
         }),
         label: LABEL_CONFIG_REGION,
         emphasis: EMPHASIS_STYLE_REGION,
+        //  shading: "realistic",
+        // // 真实感材质相关的配置项
+        // realisticMaterial: {
+        //     detailTexture: mapBgChina, // 纹理图片
+        //     textureTiling: 1,
+        // },
+       
       },
       ...createScatterSeries(regionScatterData),
     ],
@@ -869,7 +889,6 @@ function setupRegionMapEvents(regionData) {
   regionChartInstance.off('mouseover');
   regionChartInstance.off('mouseout');
   regionChartInstance.off('click');
-console.log('setupRegionMapEvents------');
   var handlers = createHighlightHandlers(regionData.features, regionChartInstance, {
     getItemStyle: function () { return ITEM_STYLE_REGION; },
   });
@@ -954,8 +973,8 @@ function initMap() {
 
   // 点击事件处理
   chartInstance.on("click", async function (params) {
-    // 散点点击：优先检查 seriesType，其次检查 stationType 字段
-    if (params.seriesType === 'scatter3D' ) {
+    // 散点点击：检查 seriesType 或 stationType 字段，有则阻止下钻
+    if (params.seriesType === 'scatter3D' || (params.data && params.data.stationType !== undefined)) {
       console.log('[散点点击 debug]', params);
       emit("scatter-click", params.data);
       return;
@@ -1065,6 +1084,8 @@ function toggleRegionMode() {
     // 清理大区地图实例并移除事件监听器，防止重复触发
     if (regionGroupChartInstance) {
       regionGroupChartInstance.off('click');
+      regionGroupChartInstance.off('mouseover');
+      regionGroupChartInstance.off('mouseout');
       regionGroupChartInstance.clear();
     }
     // 隐藏省份详情地图容器
@@ -1090,8 +1111,11 @@ function showRegionDistribution(skipRender) {
   showRegionColors.value = true;
   showLegend.value = true;
 
-  // 清理中国地图实例
+  // 清理中国地图实例并移除事件监听器
   if (chartInstance) {
+    chartInstance.off('click');
+    chartInstance.off('mouseover');
+    chartInstance.off('mouseout');
     chartInstance.clear();
   }
   // 隐藏省份详情地图容器

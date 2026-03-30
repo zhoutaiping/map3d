@@ -15,6 +15,11 @@
 - `App.vue` 通过 `@scatter-click="handleScatterClick"` 监听，`console.log('[散点点击]', data)` 打印
 - **修复**：散点点击重复触发问题 - 在 `switchToContainer()` 切换大小区模式时添加 `chartInstance.off('click')` 和 `regionGroupChartInstance.off('click')` 移除旧的事件监听器，防止重复触发
 - **修复**：省份下钻后散点点击不触发 - 在 `setupRegionMapEvents()` 和 `setupRegionGroupDrillDownEvents()` 中添加散点 click 事件处理
+- **修复**：散点与城市名重合时点击失效 - 给所有 map3D 配置添加 `zlevel: 1`（散点为 99），确保散点优先捕获点击事件
+- **修复**：在 `renderChinaMap()` 中添加 `chartInstance.off('click')` 移除旧的点击事件监听器，防止多次渲染时事件累积（已撤销，因导致功能失效）
+- **修复**：散点与省会城市标签重合时 tooltip 和 click 不生效 - 将散点高度从 0 改为 3，让散点悬浮在地图表面之上，物理分离避免误触
+- **修复**：点击散点时阻止地图下钻 - 统一三个地图实例的散点检查条件，同时检查 `seriesType === 'scatter3D'` 和 `stationType !== undefined`
+- **修复**：地图切换时事件监听器清理不完整 - 在 `renderChinaMap()`、`showRegionDistribution()`、`toggleRegionMode()` 中添加完整的 off('click')/off('mouseover')/off('mouseout') 清理
 
 ## 散点渲染配置
 

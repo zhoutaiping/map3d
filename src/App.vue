@@ -134,7 +134,7 @@ const INITIAL_CITY_DATA = [
 const INITIAL_REGION_GROUPS = [
   {
     nameType: "北方大区",
-    color: "#9EB46D",
+    color: "#9FB670",
     colorStatus: true,
     provinceList: [
       "新疆维吾尔自治区",
