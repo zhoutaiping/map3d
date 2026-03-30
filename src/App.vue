@@ -35,7 +35,6 @@
         v-model:regionGroups="regionGroups"
         @region-change="handleRegionChange"
         @view-state-change="handleViewStateChange"
-        @animationend="handleAnimationEnd"
       />
       <div class="control-panel">
         <button
