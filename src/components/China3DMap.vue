@@ -3,13 +3,13 @@ import { ref, watch, nextTick, onMounted, onBeforeUnmount } from "vue";
 import * as echarts from "echarts";
 import "echarts-gl";
 import chinaJson from "../../public/maps/china.json";
-import tooltipBg from "../assets/toolbg.png";
+import tooltipBg from "@/assets/images/home/toolbg.png";
 
-import mapBgDefault from "@/assets/mapBgDefault.jpeg";
-import mapBgChina from "@/assets/mapBgChina.jpg";
-import mapBgRegion from "@/assets/mapBgRegion.png";
+import mapBgDefault from "@/assets/images/home/mapBgDefault.jpeg";
+import mapBgChina from "@/assets/images/home/mapBgChina.jpg";
+import mapBgRegion from "@/assets/images/home/mapBgRegion.png";
 
-const emit = defineEmits(["region-change", "view-state-change"]);
+const emit = defineEmits(["region-change", "view-state-change", "scatter-click"]);
 const scatterData = defineModel("scatterData", { type: Array, default: () => [] });
 const regionGroups = defineModel("regionGroups", { type: Array, default: () => [] });
 
@@ -61,7 +61,7 @@ const ITEM_STYLE_REGION = {
 
 const EMPHASIS_STYLE_CHINA = {
   itemStyle: {
-    color: "rgb(68, 133, 158)",
+    // color: 'transparent',
     borderWidth: 2,
     borderColor: "#fff",
     opacity: 0.8,
@@ -257,21 +257,23 @@ function createScatterSeries(scatterData, extra) {
     acc[type].push(item);
     return acc;
   }, {});
+  console.log('groups', groups);
 
   var extraObj = extra || {};
 
-  return Object.keys(groups).map(function (type) {
+  return Object.keys(groups).map(function (type, index) {
     var colors = STATION_TYPE_COLORS[type] || STATION_TYPE_COLORS._default;
     return Object.assign({
       type: "scatter3D",
       coordinateSystem: "geo3D",
-      symbolSize: 15,
+    //   symbol: "pin",
+      symbolSize: 20,
       zlevel: 99,
-      geo3DIndex: 0,
+      geo3DIndex: index+20,
       silent: false,
       blendMode: "source-over",
       itemStyle: {
-        opacity: 0.9,
+        opacity: 0.95,
         borderColor: "#fff",
         borderWidth: 1,
         color: colors.normal,
@@ -286,6 +288,8 @@ function createScatterSeries(scatterData, extra) {
         },
       },
       emphasis: {
+        scale: true,
+        scaleSize: 1.4,
         itemStyle: {
           opacity: 1,
           borderColor: "#fff",
@@ -340,6 +344,7 @@ function transformStationsToScatter(stations) {
       value: [s.longitude || 0, s.latitude || 0, 0],
       stationType: s.stationType,
       stationName: s.stationName,
+      stationCode: s.stationCode,
       province: s.province,
       latitude: s.latitude,
       longitude: s.longitude,
@@ -500,11 +505,11 @@ function renderChinaMap(resetRegionState = false) {
     ],
   };
 
-  chartInstance.clear();
-  chartInstance.setOption(option);
+  chartInstance && chartInstance.clear();
+  chartInstance && chartInstance.setOption(option);
   // 确保图表正确渲染
-  chartInstance.resize();
-  emit("region-change", { level: "china", name: "", stack: [] });
+  chartInstance && chartInstance.resize();
+  chartInstance && emit("region-change", { level: "china", name: "", stack: [] });
 }
 
 // 渲染大区分布全国地图（在 regionGroupContainer 中）
@@ -617,8 +622,14 @@ function setupRegionGroupMapEvents() {
 
   // 点击事件 - 下钻到大区
   regionGroupChartInstance.on("click", async function (params) {
+    console.log('[散点点击 debug]', params);
+    // 散点点击：优先检查 seriesType，其次检查 stationType 字段
+    if (params.seriesType === 'scatter3D' ) {
+      console.log('[散点点击 debug]', params);
+      emit("scatter-click", params.data);
+      return;
+    }
     if (!params.name) return;
-
     const provinceName = params.name;
     const region = getProvinceRegion(provinceName);
 
@@ -762,7 +773,15 @@ function setupRegionGroupDrillDownEvents(regionGeoJson) {
   regionGroupChartInstance.on("mouseover", handlers.onmouseover);
   regionGroupChartInstance.on("mouseout", handlers.onmouseout);
 
-  // 点击事件已移除 - 不再支持下钻到单独省份
+  // 散点点击事件
+  regionGroupChartInstance.on("click", function (params) {
+    // 散点点击：优先检查 seriesType，其次检查 stationType 字段
+    if (params.seriesType === 'scatter3D' || (params.data && params.data.stationType !== undefined)) {
+      console.log('[散点点击 debug]', params);
+      emit("scatter-click", params.data);
+      return;
+    }
+  });
 }
 
 // 渲染区域地图（省份或市级）
@@ -849,13 +868,25 @@ async function renderRegionMap(adcode, name) {
 function setupRegionMapEvents(regionData) {
   regionChartInstance.off('mouseover');
   regionChartInstance.off('mouseout');
-
+  regionChartInstance.off('click');
+console.log('setupRegionMapEvents------');
   var handlers = createHighlightHandlers(regionData.features, regionChartInstance, {
     getItemStyle: function () { return ITEM_STYLE_REGION; },
   });
 
   regionChartInstance.on("mouseover", handlers.onmouseover);
   regionChartInstance.on("mouseout", handlers.onmouseout);
+
+  // 散点点击事件
+  regionChartInstance.on("click", function (params) {
+    console.log('setupRegionMapEvents------click', params);
+    // 散点点击：优先检查 seriesType，其次检查 stationType 字段
+    if (params.seriesType === 'scatter3D' || (params.data && params.data.stationType !== undefined)) {
+      console.log('[散点点击 debug]', params);
+      emit("scatter-click", params.data);
+      return;
+    }
+  });
 }
 
 // 初始化地图
@@ -923,6 +954,12 @@ function initMap() {
 
   // 点击事件处理
   chartInstance.on("click", async function (params) {
+    // 散点点击：优先检查 seriesType，其次检查 stationType 字段
+    if (params.seriesType === 'scatter3D' ) {
+      console.log('[散点点击 debug]', params);
+      emit("scatter-click", params.data);
+      return;
+    }
     if (!params.name) return;
 
     const regionName = params.name;
@@ -1005,8 +1042,9 @@ function toggleRegionMode() {
   // 切换容器显示
   if (showRegions.value) {
     // 开启大区模式：显示大区地图
-    // 清理中国地图实例
+    // 清理中国地图实例并移除事件监听器，防止重复触发
     if (chartInstance) {
+      chartInstance.off('click');
       chartInstance.clear();
     }
     // 隐藏省份详情地图容器
@@ -1024,8 +1062,9 @@ function toggleRegionMode() {
     emitViewStateChange();
   } else {
     // 关闭大区模式：返回全国地图
-    // 清理大区地图实例
+    // 清理大区地图实例并移除事件监听器，防止重复触发
     if (regionGroupChartInstance) {
+      regionGroupChartInstance.off('click');
       regionGroupChartInstance.clear();
     }
     // 隐藏省份详情地图容器
@@ -1099,42 +1138,6 @@ function getProvinceRegion(provinceName) {
   return null;
 }
 
-// 计算 GeoJSON 特征的中心点
-function getFeatureCenter(feature) {
-  const geometry = feature.geometry;
-  if (!geometry) return null;
-
-  let minLng = Infinity, maxLng = -Infinity;
-  let minLat = Infinity, maxLat = -Infinity;
-
-  let coordinates;
-  if (geometry.type === "Polygon") {
-    coordinates = [geometry.coordinates];
-  } else if (geometry.type === "MultiPolygon") {
-    coordinates = geometry.coordinates;
-  } else {
-    return null;
-  }
-
-  if (!coordinates) return null;
-
-  // 遍历所有坐标找到边界框
-  coordinates.forEach(function (polygon) {
-    polygon.forEach(function (ring) {
-      ring.forEach(function (point) {
-        if (point[0] < minLng) minLng = point[0];
-        if (point[0] > maxLng) maxLng = point[0];
-        if (point[1] < minLat) minLat = point[1];
-        if (point[1] > maxLat) maxLat = point[1];
-      });
-    });
-  });
-
-  if (minLng === Infinity) return null;
-
-  // 返回边界框中心点
-  return [(minLng + maxLng) / 2, (minLat + maxLat) / 2];
-}
 
 
 // 重置为全国地图（清理所有状态和实例）

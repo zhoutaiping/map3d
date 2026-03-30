@@ -19,7 +19,8 @@
       <img class="rotate-border rotate-border-1" :src="rotateBorder1Map" alt="" />
       <img class="rotate-border rotate-border-2" :src="rotateBorder2Map" alt="" />
       <China3DMap ref="mapRef" v-model:scatterData="chinaCityData" v-model:regionGroups="regionGroups"
-        @region-change="handleRegionChange" @view-state-change="handleViewStateChange" />
+        @region-change="handleRegionChange" @view-state-change="handleViewStateChange"
+        @scatter-click="handleScatterClick" />
       <div class="control-panel">
         <button class="region-btn" id="regionGroupButn" :class="{ active: showRegionColors }"
           @click="toggleRegionMode">
@@ -44,8 +45,8 @@
 import { ref, computed, onMounted } from "vue";
 import China3DMap from "./components/China3DMap.vue";
 import "animate.css";
-import rotateBorder1Map from "./assets/rotateBorder1Map.png";
-import rotateBorder2Map from "./assets/rotateBorder2Map.png";
+import rotateBorder1Map from "@/assets/images/home/rotateBorder1Map.png";
+import rotateBorder2Map from "@/assets/images/home/rotateBorder2Map.png";
 
 const INITIAL_CITY_DATA = [
   {
@@ -316,6 +317,10 @@ const displayPath = computed(() => {
   return path.join(" > ");
 });
 
+function handleScatterClick(data) {
+  console.log('[散点点击]', data);
+}
+
 function handleRegionChange(region) {
   currentRegion.value = region;
 }
@@ -343,6 +348,10 @@ function toggleRegionMode() {
       if (mapRef.value) {
         mapRef.value.resetToChinaMap(true);
       }
+      // resetToChinaMap(true) 不会触发 emitViewStateChange，需手动同步状态
+      isRegionMode.value = false;
+      showRegionColors.value = false;
+      showLegend.value = false;
     });
   } else {
     // 当前是全国模式 → 切换到大区模式
