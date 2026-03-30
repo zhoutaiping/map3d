@@ -9,65 +9,30 @@
         {{ displayPath }}
       </div>
     </div>
-    <div
-      style="
+    <div style="
         width: 80%;
         height: 90%;
         margin: 0 auto;
         position: absolute;
         left: 10%;
-      "
-      class="mapBox"
-    >
-      <img
-        class="rotate-border rotate-border-1"
-        :src="rotateBorder1Map"
-        alt=""
-      />
-      <img
-        class="rotate-border rotate-border-2"
-        :src="rotateBorder2Map"
-        alt=""
-      />
-      <China3DMap
-        ref="mapRef"
-        v-model:scatterData="chinaCityData"
-        v-model:regionGroups="regionGroups"
-        @region-change="handleRegionChange"
-        @view-state-change="handleViewStateChange"
-      />
+      " class="mapBox">
+      <img class="rotate-border rotate-border-1" :src="rotateBorder1Map" alt="" />
+      <img class="rotate-border rotate-border-2" :src="rotateBorder2Map" alt="" />
+      <China3DMap ref="mapRef" v-model:scatterData="chinaCityData" v-model:regionGroups="regionGroups"
+        @region-change="handleRegionChange" @view-state-change="handleViewStateChange" />
       <div class="control-panel">
-        <button
-          class="region-btn"
-          id="chinaButn"
-          :class="{ active: isChinaBgActive }"
-          @click="toggleChinaBg"
-        >
-          {{ isChinaBgActive ? "隐藏/全国" : "显示/全国" }}
-        </button>
-        <button
-          class="region-btn"
-          id="regionGroupButn"
-          :class="{ active: showRegionColors }"
-          @click="showRegionDistribution"
-        >
-          业务大区分布
+        <button class="region-btn" id="regionGroupButn" :class="{ active: showRegionColors }"
+          @click="toggleRegionMode">
+          {{ isRegionMode ? '返回全国' : '业务大区分布' }}
         </button>
       </div>
 
       <div v-if="showLegend" class="legend">
-        <div
-          v-for="(region, index) in regionGroups"
-          :key="region.nameType"
-          class="legend-item"
-          @click="toggleRegionColorStatus(index)"
-        >
-          <span
-            class="legend-color"
-            :style="{
-              backgroundColor: region.colorStatus ? region.color : 'darkgray',
-            }"
-          ></span>
+        <div v-for="(region, index) in regionGroups" :key="region.nameType" class="legend-item"
+          @click="toggleRegionColorStatus(index)">
+          <span class="legend-color" :style="{
+            backgroundColor: region.colorStatus ? region.color : 'darkgray',
+          }"></span>
           <span class="legend-text">{{ region.nameType }}</span>
         </div>
       </div>
@@ -76,7 +41,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from "vue";
+import { ref, computed, onMounted } from "vue";
 import China3DMap from "./components/China3DMap.vue";
 import "animate.css";
 import rotateBorder1Map from "./assets/rotateBorder1Map.png";
@@ -336,16 +301,15 @@ const chinaCityData = ref([]);
 const regionGroups = ref([]);
 const mapFlag = ref("PROVINCES");
 
-setTimeout(() => {
-  chinaCityData.value = INITIAL_CITY_DATA;
-}, 200);
+// setTimeout(() => {
+//   
+// }, 200);
 // 视图状态（由子组件通过事件驱动更新）
 const isRegionMode = ref(false);
 const showRegionColors = ref(false);
 const showLegend = ref(false);
 
-// 全国背景图切换状态
-const isChinaBgActive = ref(false);
+
 
 const displayPath = computed(() => {
   const path = ["中国", ...currentRegion.value.stack.map((s) => s.name)];
@@ -368,23 +332,31 @@ function goBack() {
   }
 }
 
-function toggleChinaBg() {
-  isChinaBgActive.value = !isChinaBgActive.value;
-  if (mapRef.value) {
-    mapRef.value.setChinaBg(isChinaBgActive.value);
+function toggleRegionMode() {
+  if (isRegionMode.value) {
+    // 当前是大区模式 → 切换回全国地图
+    // 先获取数据，再重置地图（避免 watch 触发重复渲染）
+    mockFetchChinaData().then(function (res) {
+      chinaCityData.value = res.scatterData;
+      regionGroups.value = [];
+      // 数据更新后再重置地图（传入 true 跳过直接渲染，由 watch 统一渲染）
+      if (mapRef.value) {
+        mapRef.value.resetToChinaMap(true);
+      }
+    });
+  } else {
+    // 当前是全国模式 → 切换到大区模式
+    mapFlag.value = "REGION";
+    // 先设置状态，再获取数据
+    if (mapRef.value) {
+      mapRef.value.showRegionDistribution();
+    }
+    // 获取数据后由 watch 触发渲染
+    mockFetchRegionData().then(function (res) {
+      regionGroups.value = res.regionGroups;
+      chinaCityData.value = res.scatterData;
+    });
   }
-}
-
-function showRegionDistribution() {
-  mapFlag.value = "REGION";
-  if (mapRef.value) {
-    mapRef.value.showRegionDistribution();
-  }
-  regionGroups.value = [];
-  mockFetchRegionData().then(function (res) {
-    regionGroups.value = res.regionGroups;
-    chinaCityData.value = res.scatterData;
-  });
 }
 
 function toggleRegionColorStatus(index) {
@@ -417,6 +389,13 @@ function mockFetchRegionData() {
     }, 300);
   });
 }
+
+onMounted(() => {
+  chinaCityData.value = []
+  mockFetchChinaData().then(function (res) {
+    chinaCityData.value = res.scatterData;
+  });
+})
 </script>
 
 <style scoped>
@@ -603,6 +582,7 @@ function mockFetchRegionData() {
   from {
     transform: translate(-50%, -50%) rotate(0deg);
   }
+
   to {
     transform: translate(-50%, -50%) rotate(360deg);
   }
@@ -612,6 +592,7 @@ function mockFetchRegionData() {
   from {
     transform: translate(-50%, -50%) rotate(0deg);
   }
+
   to {
     transform: translate(-50%, -50%) rotate(-360deg);
   }

@@ -6,7 +6,7 @@ import chinaJson from "../../public/maps/china.json";
 import tooltipBg from "../assets/toolbg.png";
 
 import mapBgDefault from "@/assets/mapBgDefault.jpeg";
-import mapBgChinaActive from "@/assets/mapBgChina.jpg";
+import mapBgChina from "@/assets/mapBgChina.jpg";
 import mapBgRegion from "@/assets/mapBgRegion.png";
 
 const emit = defineEmits(["region-change", "view-state-change"]);
@@ -121,7 +121,7 @@ const REALISTIC_MATERIAL = {
   roughness: 0.3,
   metalness: 0.4,
   metalnessRoughness: 0.5,
-  detailTexture: mapBgChinaActive,
+  detailTexture: mapBgChina,
 };
 
 const LABEL_CONFIG_CHINA = {
@@ -239,46 +239,64 @@ function createRegionGroupTooltipConfig() {
   };
 }
 
-// scatter3D series 工厂函数
+// 按站点类型分组的颜色映射
+var STATION_TYPE_COLORS = {
+  '光伏': { normal: '#52c41a', emphasis: '#73d13d' },
+  '风电': { normal: '#1890ff', emphasis: '#40a9ff' },
+  _default: { normal: '#fa8c16', emphasis: '#ffa940' },
+};
+
+// scatter3D series 工厂函数，按 stationType 分组返回数组
 function createScatterSeries(scatterData, extra) {
-  return Object.assign({
-    type: "scatter3D",
-    coordinateSystem: "geo3D",
-    symbolSize: 15,
-    zlevel: 99,
-    geo3DIndex: 0,
-    silent: false,
-    blendMode: "source-over",
-    itemStyle: {
-      opacity: 0.9,
-      borderColor: "#fff",
-      borderWidth: 1,
-      color: function (params) {
-        return params.data && params.data.stationType === '光伏' ? "#52c41a" : "#fa8c16";
-      },
-    },
-    label: {
-      show: false,
-      color: "#fff",
-      textShadowColor: "#000",
-      textShadowBlur: 3,
-      formatter: function (params) {
-        return params.name;
-      },
-    },
-    emphasis: {
+  if (!scatterData || !Array.isArray(scatterData) || scatterData.length === 0) return [];
+
+  // 按 stationType 分组
+  var groups = scatterData.reduce(function (acc, item) {
+    var type = item.stationType || '_default';
+    if (!acc[type]) acc[type] = [];
+    acc[type].push(item);
+    return acc;
+  }, {});
+
+  var extraObj = extra || {};
+
+  return Object.keys(groups).map(function (type) {
+    var colors = STATION_TYPE_COLORS[type] || STATION_TYPE_COLORS._default;
+    return Object.assign({
+      type: "scatter3D",
+      coordinateSystem: "geo3D",
+      symbolSize: 15,
+      zlevel: 99,
+      geo3DIndex: 0,
+      silent: false,
+      blendMode: "source-over",
       itemStyle: {
-        opacity: 1,
+        opacity: 0.9,
         borderColor: "#fff",
-        borderWidth: 3,
-        color: function (params) {
-          return params.data && params.data.stationType === '光伏' ? "#73d13d" : "#ffa940";
+        borderWidth: 1,
+        color: colors.normal,
+      },
+      label: {
+        show: false,
+        color: "#fff",
+        textShadowColor: "#000",
+        textShadowBlur: 3,
+        formatter: function (params) {
+          return params.name;
         },
       },
-    },
-    data: transformStationsToScatter(scatterData),
-    shading: "lambert",
-  }, extra || {});
+      emphasis: {
+        itemStyle: {
+          opacity: 1,
+          borderColor: "#fff",
+          borderWidth: 3,
+          color: colors.emphasis,
+        },
+      },
+      data: transformStationsToScatter(groups[type]),
+      shading: "lambert",
+    }, extraObj);
+  });
 }
 
 // 高亮事件处理器工厂
@@ -478,7 +496,7 @@ function renderChinaMap(resetRegionState = false) {
         },
         emphasis: EMPHASIS_STYLE_CHINA,
       },
-      createScatterSeries(scatterData.value),
+      ...createScatterSeries(scatterData.value),
     ],
   };
 
@@ -567,7 +585,7 @@ function renderRegionGroupMap() {
         },
         emphasis: EMPHASIS_STYLE_CHINA,
       },
-      createScatterSeries(regionGroupsScatterData),
+      ...createScatterSeries(regionGroupsScatterData),
     ],
   };
 
@@ -658,8 +676,8 @@ function renderRegionGroupDrillDown(regionGroup) {
   const provinceCount = provinceFeatures.length;
   const dynamicDistance = provinceCount >= 12 ? 220
     : provinceCount >= 8 ? 160
-    : provinceCount >= 5 ? 160
-    : 160;
+      : provinceCount >= 5 ? 160
+        : 160;
   const drillDownViewControl = { ...REGION_VIEW_CONTROL, distance: dynamicDistance };
 
   const option = {
@@ -689,13 +707,13 @@ function renderRegionGroupDrillDown(regionGroup) {
           areaColor: regionGroup.color,
         },
         realisticMaterial: {
-          detailTexture: mapBgChinaActive,
+          detailTexture: mapBgChina,
         },
         data: areaData,
         label: LABEL_CONFIG_REGION,
         emphasis: EMPHASIS_STYLE_REGION,
       },
-      createScatterSeries(regionScatterData, {
+      ...createScatterSeries(regionScatterData, {
         emphasis: {
           itemStyle: {
             opacity: 0.8,
@@ -809,7 +827,7 @@ async function renderRegionMap(adcode, name) {
         label: LABEL_CONFIG_REGION,
         emphasis: EMPHASIS_STYLE_REGION,
       },
-      createScatterSeries(regionScatterData),
+      ...createScatterSeries(regionScatterData),
     ],
   };
 
@@ -1027,7 +1045,8 @@ function toggleRegionMode() {
 }
 
 // 显示业务大区分布（"业务大区分布"按钮）
-function showRegionDistribution() {
+// skipRender: 跳过直接渲染（数据更新后由 watch 统一渲染，避免重复）
+function showRegionDistribution(skipRender) {
   // 始终显示大区颜色分组和图例
   showRegionColors.value = true;
   showLegend.value = true;
@@ -1050,22 +1069,23 @@ function showRegionDistribution() {
     regionGroupContainer.value.style.display = 'block';
   }
 
-  // 更新大区颜色状态
-  var updatedGroups = regionGroups.value.map(function (group) {
-    if (scatterData.value.length > 0) {
-      var hasData = group.provinceList.some(function (province) {
-        return scatterData.value.some(function (point) {
-          return point.province === province;
+  // 更新大区颜色状态（仅在非 skipRender 时修改，避免额外触发 watch）
+  if (!skipRender) {
+    var updatedGroups = regionGroups.value.map(function (group) {
+      if (scatterData.value.length > 0) {
+        var hasData = group.provinceList.some(function (province) {
+          return scatterData.value.some(function (point) {
+            return point.province === province;
+          });
         });
-      });
-      return Object.assign({}, group, { colorStatus: hasData });
-    }
-    return Object.assign({}, group, { colorStatus: true });
-  });
-  regionGroups.value = updatedGroups;
-
-  renderRegionGroupMap();
-  emitViewStateChange();
+        return Object.assign({}, group, { colorStatus: hasData });
+      }
+      return Object.assign({}, group, { colorStatus: true });
+    });
+    regionGroups.value = updatedGroups;
+    renderRegionGroupMap();
+    emitViewStateChange();
+  }
 }
 
 // 获取省份所属大区
@@ -1118,7 +1138,8 @@ function getFeatureCenter(feature) {
 
 
 // 重置为全国地图（清理所有状态和实例）
-function resetToChinaMap() {
+// skipRender: 跳过直接渲染（数据更新后由 watch 统一渲染，避免重复）
+function resetToChinaMap(skipRender) {
   showRegions.value = false;
   showRegionColors.value = false;
   showLegend.value = false;
@@ -1129,9 +1150,11 @@ function resetToChinaMap() {
   if (regionGroupChartInstance) regionGroupChartInstance.clear();
   if (regionChartInstance) regionChartInstance.clear();
   if (regionMapContainer.value) regionMapContainer.value.classList.remove('active');
-  renderChinaMap();
-  if (chartInstance) chartInstance.resize();
-  emitViewStateChange();
+  if (!skipRender) {
+    renderChinaMap();
+    if (chartInstance) chartInstance.resize();
+    emitViewStateChange();
+  }
 }
 
 // 返回上一级
@@ -1221,8 +1244,8 @@ watch(scatterData, function () {
 
 // 暴露方法给父组件
 // 切换全国背景图（供父组件按钮调用）
-function setChinaBg(isActive) {
-  currentBgImage.value = isActive ? mapBgChinaActive : mapBgDefault;
+function setChinaBg() {
+  currentBgImage.value = mapBgDefault;
 
   // 如果当前在省份下钻模式，清理省份地图并重渲染全国地图
   if (regionMapContainer.value && regionMapContainer.value.classList.contains('active')) {
@@ -1267,6 +1290,7 @@ defineExpose({
   toggleRegionMode,
   showRegionDistribution,
   setChinaBg,
+  resetToChinaMap, // 支持 skipRender 参数避免重复渲染
 });
 
 onMounted(function () {
@@ -1374,6 +1398,4 @@ onBeforeUnmount(function () {
 .region-map-container.active {
   display: block;
 }
-
-
 </style>
