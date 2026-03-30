@@ -516,6 +516,66 @@ function renderChinaMap(resetRegionState = false) {
   // 确保图表正确渲染
   chartInstance && chartInstance.resize();
   chartInstance && emit("region-change", { level: "china", name: "", stack: [] });
+  
+  // 重新绑定中国地图的点击事件（解决返回全国后下钻功能失效的问题）
+  if (chartInstance) {
+    chartInstance.off('click');
+    chartInstance.on("click", async function (params) {
+      // 散点点击：检查 seriesType 或 stationType 字段，有则阻止下钻
+      if (params.seriesType === 'scatter3D' || (params.data && params.data.stationType !== undefined)) {
+        console.log('[散点点击 debug]', params);
+        emit("scatter-click", params.data);
+        return;
+      }
+      if (!params.name) return;
+
+      const regionName = params.name;
+
+      // 检查是否在中国地图
+      if (navigationStack.value.length === 0) {
+        const feature = chinaJson.features.find(
+          function (f) {
+            return f.properties.name === regionName;
+          }
+        );
+
+        if (feature) {
+          const adcode = feature.properties.adcode;
+          navigationStack.value.push({
+            adcode: "100000",
+            name: "中国",
+            mapData: chinaJson,
+          });
+          await renderRegionMap(adcode, regionName);
+        }
+      } else {
+        showRegions.value = false
+        // 在省份或市级地图上
+        const currentMapData = await loadMapData(
+          navigationStack.value[navigationStack.value.length - 1].adcode,
+          navigationStack.value[navigationStack.value.length - 1].name
+        );
+
+        if (currentMapData) {
+          const feature = currentMapData.features.find(
+            function (f) {
+              return f.properties.name === regionName;
+            }
+          );
+
+          if (feature && feature.properties.childrenNum > 0) {
+            const childAdcode = feature.properties.adcode;
+            navigationStack.value.push({
+              adcode: childAdcode,
+              name: regionName,
+              mapData: currentMapData,
+            });
+            await renderRegionMap(childAdcode, regionName);
+          }
+        }
+      }
+    });
+  }
 }
 
 // 渲染大区分布全国地图（在 regionGroupContainer 中）

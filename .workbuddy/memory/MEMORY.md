@@ -20,6 +20,8 @@
 - **修复**：散点与省会城市标签重合时 tooltip 和 click 不生效 - 将散点高度从 0 改为 3，让散点悬浮在地图表面之上，物理分离避免误触
 - **修复**：点击散点时阻止地图下钻 - 统一三个地图实例的散点检查条件，同时检查 `seriesType === 'scatter3D'` 和 `stationType !== undefined`
 - **修复**：地图切换时事件监听器清理不完整 - 在 `renderChinaMap()`、`showRegionDistribution()`、`toggleRegionMode()` 中添加完整的 off('click')/off('mouseover')/off('mouseout') 清理
+- **修复**：async/await 导致的 message channel closed 错误 - 移除不必要的 async，添加 try-catch 包裹异步事件处理
+- **修复**：返回全国后下钻功能失效 - 在 `renderChinaMap()` 函数末尾重新绑定点击事件，解决下钻功能失效问题
 
 ## 散点渲染配置
 
@@ -27,6 +29,23 @@
 - `value[2]` 高度为 `3`（原 0），散点悬浮在地图面之上，物理分离避免误触
 - `emphasis.scale: true`，`scaleSize: 1.4`，悬停时放大反馈
 - mouseover 事件**未加** scatter3D 过滤（回退后发现影响业务大区切换）
+
+## 散点图标修复 (2026-03-30)
+- **问题1**: scatter3D 散点根据 stationType 设置图标不生效
+  - 原因：中国地图模式调用 `createScatterSeries` 时未传递 `useCustomIcon: true` 参数
+  - 修复：在第662行添加 `{ useCustomIcon: true }` 参数
+- **问题2**: 图标颜色被覆盖
+  - 原因：使用图片图标时设置了 `itemStyle.color`，覆盖了图片本身的颜色
+  - 修复：在 `createScatterSeries` 函数中，当 `useCustomIcon` 为 true 时将 `color` 设置为 `'transparent'`
+
+## 地图纹理修复 (2026-03-30)
+- **问题**: 地图纹理图片 mapBgChina 颜色被覆盖
+  - 原因：`itemStyle.color` 属性覆盖了纹理颜色
+  - 修复：直接在地图的 `itemStyle` 中设置 `color: 'transparent'`，移除对 `ITEM_STYLE_TEXTURED` 常量的依赖
+  - 应用：中国地图和大区地图的 series 配置使用 `color: 'transparent'`，让纹理图片正常显示
+- **后续问题**: 地图省份显示为透明
+  - 原因：当使用 `realisticMaterial` 时，地图本身的颜色会被设置为 `transparent`
+  - 解决方案：这是预期行为，纹理应该覆盖整个地图，而不是显示省份颜色
 
 ## 旋转边框
 
