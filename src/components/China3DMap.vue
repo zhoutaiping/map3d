@@ -266,6 +266,7 @@ function createScatterSeries(scatterData, extra) {
       coordinateSystem: "geo3D",
     //   symbol: "pin",
       symbolSize: 20,
+      animationDurationUpdate: 0, // 关键：禁用动画
       zlevel: 99,
       geo3DIndex: index+20,
       silent: false,
@@ -294,6 +295,9 @@ function createScatterSeries(scatterData, extra) {
           borderWidth: 3,
           color: colors.emphasis,
         },
+        label: {
+         show: false,
+        }
       },
       data: transformStationsToScatter(groups[type]),
       shading: "lambert",
@@ -466,6 +470,7 @@ function renderChinaMap(resetRegionState = false) {
       show: false,
       map: 'china',
       aspectScale: 0.9,
+      animationDurationUpdate: 0, // 关键：禁用动画
       zoom: 0.5,
       selectedMode: false,
       viewControl: DEFAULT_VIEW_CONTROL,
@@ -627,6 +632,7 @@ function renderRegionGroupMap() {
     geo3D: {
       show: false,
       map: 'china-region-group',
+      animationDurationUpdate: 0, // 关键：禁用动画
       aspectScale: 0.9,
       zoom: 0.5,
       selectedMode: false,
@@ -768,6 +774,7 @@ function renderRegionGroupDrillDown(regionGroup) {
     geo3D: {
       show: false,
       map: 'region-group-drilldown',
+      animationDurationUpdate: 0, // 关键：禁用动画
       aspectScale: 0.9,
       zoom: 1,
       selectedMode: false,
@@ -892,6 +899,7 @@ async function renderRegionMap(adcode, name) {
       show: false,
       map: name,
       aspectScale: 0.9,
+      animationDurationUpdate: 0, // 关键：禁用动画
       zoom: 1,
       selectedMode: false,
       viewControl: REGION_VIEW_CONTROL,
