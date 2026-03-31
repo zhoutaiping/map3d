@@ -22,7 +22,7 @@
         @region-change="handleRegionChange" @view-state-change="handleViewStateChange"
         @scatter-click="handleScatterClick" />
       <div class="control-panel">
-        <button class="region-btn" id="regionGroupButn" :class="{ active: showRegionColors }"
+        <button v-if="showRegionGroupBtn" class="region-btn" id="regionGroupButn" :class="{ active: showRegionColors }"
           @click="toggleRegionMode">
           {{ isRegionMode ? '返回全国' : '业务大区分布' }}
         </button>
@@ -315,6 +315,12 @@ const showLegend = ref(false);
 const displayPath = computed(() => {
   const path = ["中国", ...currentRegion.value.stack.map((s) => s.name)];
   return path.join(" > ");
+});
+
+const showRegionGroupBtn = computed(() => {
+  const level = currentRegion.value.level;
+  if (!level) return true;
+  return level === "china" || level === "region-group";
 });
 
 function handleScatterClick(data) {
