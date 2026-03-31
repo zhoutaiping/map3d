@@ -22,6 +22,8 @@
 - **修复**：地图切换时事件监听器清理不完整 - 在 `renderChinaMap()`、`showRegionDistribution()`、`toggleRegionMode()` 中添加完整的 off('click')/off('mouseover')/off('mouseout') 清理
 - **修复**：async/await 导致的 message channel closed 错误 - 移除不必要的 async，添加 try-catch 包裹异步事件处理
 - **修复**：返回全国后下钻功能失效 - 在 `renderChinaMap()` 函数末尾重新绑定点击事件，解决下钻功能失效问题
+- **修复**：台湾省不能下钻的问题 - 移除 `childrenNum > 0` 的限制，允许台湾省等行政区划下钻
+- **修复**：海南省下钻时南海诸岛不渲染的问题 - 为海南省添加特殊的视图控制配置，调整中心点和缩放级别确保南海诸岛可见
 
 ## 散点渲染配置
 
