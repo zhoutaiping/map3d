@@ -1,11 +1,22 @@
 # 项目长期记忆
 
-## China3DMap.vue 架构概览
+## China3DMap.vue 架构概览（2026-03-31 已改为 2D）
 
+- **已从 3D 改为 2D**：移除 `echarts-gl` 依赖，`map3D`→`map`，`geo3D`→`geo`，`scatter3D`→`scatter`
 - 三个 ECharts 实例：`chartInstance`（主地图）、`regionGroupChartInstance`（大区模式）、`regionChartInstance`（省级下钻）
-- `createScatterSeries(scatterData, extra)` 按 `stationType` 分组返回 `scatter3D` series 数组；`STATION_TYPE_COLORS` 定义颜色（光伏=绿、风电=蓝、其他=橙）
-- 公共工具函数：`createScatterTooltipFormatter`、`createHighlightHandler`、`switchToContainer`
+- `createScatterSeries(scatterData, extra)` 按 `stationType` 分组返回 `scatter` series 数组；`STATION_TYPE_COLORS` 定义颜色（光伏=绿、风电=蓝、其他=橙）
+- `createHighlightHandlers(mapInstance, options)` 使用 `dispatchAction highlight/downplay` 实现 2D 高亮
+- scatter `value` 格式为 `[lng, lat]`（2D），coordinateSystem 为 `"geo"`
 - emit 列表：`region-change`、`view-state-change`、`scatter-click`
+- 散点点击判断条件：`seriesType === 'scatter'` 或 `stationType !== undefined`
+- **修复（2026-03-31）**：大区全国地图 `renderRegionGroupMap` 中，series 级别的 `itemStyle: ITEM_STYLE_CHINA`（含 areaColor）会覆盖 data 里每个省份的大区颜色 → 改为只保留 borderWidth/borderColor，不设 areaColor，让 data 数据颜色生效
+- **修复（2026-03-31）**：业务大区模式省份颜色不显示问题 - 同时修复 geo 层的 itemStyle（移除 areaColor），并修改颜色逻辑：只要有 region.color 就使用大区颜色，不依赖 colorStatus
+- **修复（2026-03-31）**：大区全国地图显示白色背景问题 - geo 和 series 的 itemStyle 都需要设置默认 areaColor（#1a2b45），否则 ECharts 会渲染白色背景
+- **修复（2026-03-31）**：台湾省未匹配到大区 - 将台湾省加入南方大区的 provinceList，确保所有省份都有所属大区
+- **修复（2026-03-31）**：大区全国地图省份颜色和tooltip问题 - 颜色逻辑移除colorStatus依赖，geo层添加默认areaColor，tooltip formatter不再依赖region.list
+- **修复（2026-03-31）**：china-region-group 地图配置 - 修复 colorStatus 依赖问题和 geo 层缺少 itemStyle 导致的白色背景
+- **修复（2026-03-31）**：大区地图省份颜色仍显示默认色 - 两个根因：①series 级别 `itemStyle.areaColor` 覆盖 data 里每个省份的颜色（改为只保留 border）；②ECharts init 时容器 display:none 导致尺寸为 0，在 `renderRegionGroupMap` 中对已存在的实例补充调用 `resize()` 刷新尺寸
+- **修复（2026-03-31）**：大区全国地图省份颜色不显示的根本原因 - `showRegionDistribution()` 在 regionGroups 数据未就绪时就直接渲染（数据有 300ms 延迟）。修复：`showRegionDistribution()` 移除旧的 skipRender 参数，改为数据已就绪时立即渲染，未就绪时由 watch(regionGroups) 在数据回来后自动渲染
 
 ## 散点点击事件
 

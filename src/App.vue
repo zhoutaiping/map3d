@@ -197,6 +197,7 @@ const INITIAL_REGION_GROUPS = [
       "海南省",
       "香港特别行政区",
       "澳门特别行政区",
+      "台湾省",
     ],
     list: [
       { name: "总规模", value: "100 kW （个）" },
